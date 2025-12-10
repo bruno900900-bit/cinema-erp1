@@ -1,0 +1,80 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Image tag override"
+        required: false
+        default: "latest"
+      enable_playwright:
+        description: "Enable Playwright (1)"
+        required: false
+        default: "0"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      PROJECT_ID: palaoro-production
+      REGION: us-central1
+      SERVICE_NAME: cinema-backend
+      REPO_NAME: cinema-backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Auth GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_JSON }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+
+      - name: Configure Docker auth
+        run: gcloud auth configure-docker $REGION-docker.pkg.dev --quiet
+
+      - name: Build backend image
+        run: |
+          TAG=${{ github.event.inputs.image_tag || 'latest' }}
+          docker build -t $REGION-docker.pkg.dev/$PROJECT_ID/$REPO_NAME/backend:$TAG backend
+          echo "TAG=$TAG" >> $GITHUB_ENV
+
+      - name: Push image
+        run: docker push $REGION-docker.pkg.dev/$PROJECT_ID/$REPO_NAME/backend:$TAG
+
+      - name: Deploy Cloud Run
+        run: |
+          PLAY=${{ github.event.inputs.enable_playwright || '0' }}
+          gcloud run deploy $SERVICE_NAME \
+            --image $REGION-docker.pkg.dev/$PROJECT_ID/$REPO_NAME/backend:$TAG \
+            --region $REGION \
+            --port 8080 \
+            --allow-unauthenticated \
+            --set-env-vars PLAYWRIGHT_ENABLED=$PLAY
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm ci || npm install --no-audit --no-fund
+          npm run build
+
+      - name: Firebase Deploy Hosting
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.GCP_SERVICE_ACCOUNT_JSON }}
+          channelId: live
+          projectId: ${{ env.PROJECT_ID }}

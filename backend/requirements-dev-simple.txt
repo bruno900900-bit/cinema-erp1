@@ -1,0 +1,38 @@
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+sqlalchemy==2.0.23
+pydantic==2.5.0
+python-multipart==0.0.6
+alembic==1.12.1
+python-dotenv==1.0.0
+requests==2.31.0
+
+# Para desenvolvimento local (SQLite)
+# psycopg2-binary==2.9.9  # Comentado para desenvolvimento local
+# geoalchemy2==0.14.2      # Comentado para desenvolvimento local
+
+# Storage e processamento de imagens
+boto3==1.34.0
+pillow==10.1.0
+# python-magic==0.4.27    # Comentado para Windows
+
+# Autenticação e segurança
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+
+# Validação e serialização
+marshmallow==3.20.1
+marshmallow-sqlalchemy==0.29.0
+
+# Exportação de apresentações
+python-pptx==0.6.21
+
+# Utilitários
+python-slugify==8.0.1
+python-dateutil==2.8.2
+pytz==2023.3
+
+# Desenvolvimento e testes
+pytest==7.4.3
+pytest-asyncio==0.21.1
+httpx==0.25.2

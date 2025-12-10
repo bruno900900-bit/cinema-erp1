@@ -1,0 +1,117 @@
+╔══════════════════════════════════════════════════════════════════╗
+║                    CINEMA ERP - GUIA RÁPIDO                      ║
+╚══════════════════════════════════════════════════════════════════╝
+
+📋 PARA INICIAR O SISTEMA:
+
+   1️⃣  Execute o arquivo: INICIAR.bat
+
+   2️⃣  O script vai detectar automaticamente se você tem Docker
+
+   3️⃣  Escolha a opção desejada
+
+   4️⃣  Aguarde a inicialização (10-30 segundos)
+
+   5️⃣  Acesse no navegador:
+
+       Com Docker:    http://localhost:3000
+       Sem Docker:    http://localhost:5173
+
+═══════════════════════════════════════════════════════════════════
+
+🎯 ARQUIVOS DISPONÍVEIS:
+
+   INICIAR.bat
+   ├─ Detecção automática e menu de escolha
+
+   INICIAR_SISTEMA_COMPLETO.bat
+   ├─ Inicia com Docker (tudo automático)
+
+   INICIAR_SEM_DOCKER.bat
+   ├─ Inicia sem Docker (precisa PostgreSQL)
+
+   PARAR_SISTEMA.bat
+   ├─ Para todos os serviços Docker
+
+   VER_LOGS.bat
+   └─ Visualiza logs em tempo real
+
+═══════════════════════════════════════════════════════════════════
+
+🔧 OPÇÃO 1: COM DOCKER (Recomendado)
+
+   ✅ Vantagens:
+      • Tudo configurado automaticamente
+      • Não precisa instalar PostgreSQL
+      • Mais fácil e rápido
+
+   📦 Requisito:
+      • Docker Desktop instalado
+      • https://www.docker.com/products/docker-desktop
+
+   🌐 URLs:
+      Frontend:  http://localhost:3000
+      Backend:   http://localhost:8000
+      API Docs:  http://localhost:8000/docs
+
+═══════════════════════════════════════════════════════════════════
+
+⚙️  OPÇÃO 2: SEM DOCKER (Manual)
+
+   📦 Requisitos:
+      • PostgreSQL 15+ rodando
+      • Python 3.11+ instalado
+      • Node.js 18+ instalado
+
+   🗄️  Configurar PostgreSQL primeiro:
+
+      psql -U postgres
+      CREATE DATABASE cinema_erp;
+      CREATE USER cinema_user WITH PASSWORD 'cinema_password';
+      GRANT ALL PRIVILEGES ON DATABASE cinema_erp TO cinema_user;
+
+   🌐 URLs:
+      Frontend:  http://localhost:5173
+      Backend:   http://localhost:8000
+      API Docs:  http://localhost:8000/docs
+
+═══════════════════════════════════════════════════════════════════
+
+❓ PROBLEMAS?
+
+   🔴 "Docker não encontrado"
+      → Instale Docker Desktop ou use modo sem Docker
+
+   🔴 "PostgreSQL connection failed"
+      → Verifique se PostgreSQL está rodando
+      → Confirme usuário/senha em backend\.env
+
+   🔴 "Port already in use"
+      → Feche aplicações que usam portas 8000 ou 5173/3000
+
+   🔴 Frontend não carrega
+      → Aguarde 15-20 segundos
+      → Verifique http://localhost:8000/health
+      → Limpe cache do navegador (Ctrl+Shift+R)
+
+═══════════════════════════════════════════════════════════════════
+
+📖 MAIS INFORMAÇÕES:
+
+   • Leia: LEIA_ME_PRIMEIRO.md (guia completo)
+   • API Docs: http://localhost:8000/docs (após iniciar)
+
+═══════════════════════════════════════════════════════════════════
+
+👉 COMECE AGORA: Execute → INICIAR.bat
+
+╚══════════════════════════════════════════════════════════════════╝
+
+
+
+
+
+
+
+
+

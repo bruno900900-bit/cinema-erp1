@@ -1,0 +1,26 @@
+steps:
+  # Build the container image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/cinema-erp-api', '.']
+
+  # Push the container image to Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/cinema-erp-api']
+
+  # Deploy container image to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'cinema-erp-api'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/cinema-erp-api'
+      - '--region'
+      - 'us-central1'
+      - '--allow-unauthenticated'
+      - '--set-env-vars'
+      - 'DATABASE_TYPE=firestore,FIREBASE_PROJECT_ID=palaoro-production,ENVIRONMENT=production'
+
+images:
+  - 'gcr.io/$PROJECT_ID/cinema-erp-api'

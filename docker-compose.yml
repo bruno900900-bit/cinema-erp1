@@ -1,0 +1,102 @@
+version: '3.8'
+
+services:
+  # Banco de dados PostgreSQL com PostGIS
+  postgres:
+    image: postgis/postgis:15-3.3
+    container_name: cinema_erp_postgres
+    environment:
+      POSTGRES_DB: cinema_erp
+      POSTGRES_USER: cinema_user
+      POSTGRES_PASSWORD: cinema_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - cinema_erp_network
+    restart: unless-stopped
+
+  # Backend FastAPI
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cinema_erp_backend
+    environment:
+      - DATABASE_URL=postgresql://cinema_user:cinema_password@postgres:5432/cinema_erp
+      - SECRET_KEY=your-secret-key-here
+      - ALGORITHM=HS256
+      - ACCESS_TOKEN_EXPIRE_MINUTES=30
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - ./uploads:/app/uploads
+    depends_on:
+      - postgres
+    networks:
+      - cinema_erp_network
+    restart: unless-stopped
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # Frontend React
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: cinema_erp_frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8000/api/v1
+    depends_on:
+      - backend
+    networks:
+      - cinema_erp_network
+    restart: unless-stopped
+    command: npm run dev
+
+  # Redis para cache e sessões
+  redis:
+    image: redis:7-alpine
+    container_name: cinema_erp_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - cinema_erp_network
+    restart: unless-stopped
+
+  # Nginx como proxy reverso
+  nginx:
+    image: nginx:alpine
+    container_name: cinema_erp_nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/ssl:/etc/nginx/ssl
+      - ./uploads:/var/www/uploads
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - cinema_erp_network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  cinema_erp_network:
+    driver: bridge

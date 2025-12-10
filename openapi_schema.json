@@ -1,0 +1,567 @@
+﻿{
+    "openapi":  "3.1.0",
+    "info":  {
+                 "title":  "Cinema ERP - Firebase Simples",
+                 "description":  "Sistema funcional com PostgreSQL e Firebase",
+                 "version":  "1.0.0"
+             },
+    "paths":  {
+                  "/":  {
+                            "get":  {
+                                        "summary":  "Root",
+                                        "operationId":  "root__get",
+                                        "responses":  {
+                                                          "200":  {
+                                                                      "description":  "Successful Response",
+                                                                      "content":  {
+                                                                                      "application/json":  {
+                                                                                                               "schema":  {
+
+                                                                                                                          }
+                                                                                                           }
+                                                                                  }
+                                                                  }
+                                                      }
+                                    }
+                        },
+                  "/health":  {
+                                  "get":  {
+                                              "summary":  "Health",
+                                              "operationId":  "health_health_get",
+                                              "responses":  {
+                                                                "200":  {
+                                                                            "description":  "Successful Response",
+                                                                            "content":  {
+                                                                                            "application/json":  {
+                                                                                                                     "schema":  {
+
+                                                                                                                                }
+                                                                                                                 }
+                                                                                        }
+                                                                        }
+                                                            }
+                                          }
+                              },
+                  "/api/v1/locations/search":  {
+                                                   "get":  {
+                                                               "summary":  "Search Locations",
+                                                               "description":  "Buscar locaÃ§Ãµes com filtros",
+                                                               "operationId":  "search_locations_api_v1_locations_search_get",
+                                                               "parameters":  [
+                                                                                  {
+                                                                                      "name":  "q",
+                                                                                      "in":  "query",
+                                                                                      "required":  false,
+                                                                                      "schema":  {
+                                                                                                     "type":  "string",
+                                                                                                     "title":  "Q"
+                                                                                                 }
+                                                                                  },
+                                                                                  {
+                                                                                      "name":  "city",
+                                                                                      "in":  "query",
+                                                                                      "required":  false,
+                                                                                      "schema":  {
+                                                                                                     "type":  "string",
+                                                                                                     "title":  "City"
+                                                                                                 }
+                                                                                  },
+                                                                                  {
+                                                                                      "name":  "status",
+                                                                                      "in":  "query",
+                                                                                      "required":  false,
+                                                                                      "schema":  {
+                                                                                                     "type":  "string",
+                                                                                                     "title":  "Status"
+                                                                                                 }
+                                                                                  }
+                                                                              ],
+                                                               "responses":  {
+                                                                                 "200":  {
+                                                                                             "description":  "Successful Response",
+                                                                                             "content":  {
+                                                                                                             "application/json":  {
+                                                                                                                                      "schema":  {
+
+                                                                                                                                                 }
+                                                                                                                                  }
+                                                                                                         }
+                                                                                         },
+                                                                                 "422":  {
+                                                                                             "description":  "Validation Error",
+                                                                                             "content":  {
+                                                                                                             "application/json":  {
+                                                                                                                                      "schema":  {
+                                                                                                                                                     "$ref":  "#/components/schemas/HTTPValidationError"
+                                                                                                                                                 }
+                                                                                                                                  }
+                                                                                                         }
+                                                                                         }
+                                                                             }
+                                                           },
+                                                   "post":  {
+                                                                "summary":  "Search Locations",
+                                                                "description":  "Busca avanÃ§ada de locaÃ§Ãµes",
+                                                                "operationId":  "search_locations_api_v1_locations_search_post",
+                                                                "requestBody":  {
+                                                                                    "content":  {
+                                                                                                    "application/json":  {
+                                                                                                                             "schema":  {
+                                                                                                                                            "type":  "object",
+                                                                                                                                            "additionalProperties":  true,
+                                                                                                                                            "title":  "Search Data"
+                                                                                                                                        }
+                                                                                                                         }
+                                                                                                }
+                                                                                },
+                                                                "responses":  {
+                                                                                  "200":  {
+                                                                                              "description":  "Successful Response",
+                                                                                              "content":  {
+                                                                                                              "application/json":  {
+                                                                                                                                       "schema":  {
+
+                                                                                                                                                  }
+                                                                                                                                   }
+                                                                                                          }
+                                                                                          },
+                                                                                  "422":  {
+                                                                                              "description":  "Validation Error",
+                                                                                              "content":  {
+                                                                                                              "application/json":  {
+                                                                                                                                       "schema":  {
+                                                                                                                                                      "$ref":  "#/components/schemas/HTTPValidationError"
+                                                                                                                                                  }
+                                                                                                                                   }
+                                                                                                          }
+                                                                                          }
+                                                                              }
+                                                            }
+                                               },
+                  "/api/v1/locations":  {
+                                            "get":  {
+                                                        "summary":  "Get Locations",
+                                                        "description":  "Listar locaÃ§Ãµes",
+                                                        "operationId":  "get_locations_api_v1_locations_get",
+                                                        "parameters":  [
+                                                                           {
+                                                                               "name":  "skip",
+                                                                               "in":  "query",
+                                                                               "required":  false,
+                                                                               "schema":  {
+                                                                                              "type":  "integer",
+                                                                                              "default":  0,
+                                                                                              "title":  "Skip"
+                                                                                          }
+                                                                           },
+                                                                           {
+                                                                               "name":  "limit",
+                                                                               "in":  "query",
+                                                                               "required":  false,
+                                                                               "schema":  {
+                                                                                              "type":  "integer",
+                                                                                              "default":  100,
+                                                                                              "title":  "Limit"
+                                                                                          }
+                                                                           },
+                                                                           {
+                                                                               "name":  "status",
+                                                                               "in":  "query",
+                                                                               "required":  false,
+                                                                               "schema":  {
+                                                                                              "type":  "string",
+                                                                                              "title":  "Status"
+                                                                                          }
+                                                                           },
+                                                                           {
+                                                                               "name":  "city",
+                                                                               "in":  "query",
+                                                                               "required":  false,
+                                                                               "schema":  {
+                                                                                              "type":  "string",
+                                                                                              "title":  "City"
+                                                                                          }
+                                                                           },
+                                                                           {
+                                                                               "name":  "include",
+                                                                               "in":  "query",
+                                                                               "required":  false,
+                                                                               "schema":  {
+                                                                                              "type":  "string",
+                                                                                              "title":  "Include"
+                                                                                          }
+                                                                           },
+                                                                           {
+                                                                               "name":  "page",
+                                                                               "in":  "query",
+                                                                               "required":  false,
+                                                                               "schema":  {
+                                                                                              "type":  "integer",
+                                                                                              "default":  1,
+                                                                                              "title":  "Page"
+                                                                                          }
+                                                                           },
+                                                                           {
+                                                                               "name":  "page_size",
+                                                                               "in":  "query",
+                                                                               "required":  false,
+                                                                               "schema":  {
+                                                                                              "type":  "integer",
+                                                                                              "default":  12,
+                                                                                              "title":  "Page Size"
+                                                                                          }
+                                                                           }
+                                                                       ],
+                                                        "responses":  {
+                                                                          "200":  {
+                                                                                      "description":  "Successful Response",
+                                                                                      "content":  {
+                                                                                                      "application/json":  {
+                                                                                                                               "schema":  {
+
+                                                                                                                                          }
+                                                                                                                           }
+                                                                                                  }
+                                                                                  },
+                                                                          "422":  {
+                                                                                      "description":  "Validation Error",
+                                                                                      "content":  {
+                                                                                                      "application/json":  {
+                                                                                                                               "schema":  {
+                                                                                                                                              "$ref":  "#/components/schemas/HTTPValidationError"
+                                                                                                                                          }
+                                                                                                                           }
+                                                                                                  }
+                                                                                  }
+                                                                      }
+                                                    },
+                                            "post":  {
+                                                         "summary":  "Create Location",
+                                                         "description":  "Criar nova locaÃ§Ã£o",
+                                                         "operationId":  "create_location_api_v1_locations_post",
+                                                         "requestBody":  {
+                                                                             "required":  true,
+                                                                             "content":  {
+                                                                                             "application/json":  {
+                                                                                                                      "schema":  {
+                                                                                                                                     "type":  "object",
+                                                                                                                                     "additionalProperties":  true,
+                                                                                                                                     "title":  "Location Data"
+                                                                                                                                 }
+                                                                                                                  }
+                                                                                         }
+                                                                         },
+                                                         "responses":  {
+                                                                           "200":  {
+                                                                                       "description":  "Successful Response",
+                                                                                       "content":  {
+                                                                                                       "application/json":  {
+                                                                                                                                "schema":  {
+
+                                                                                                                                           }
+                                                                                                                            }
+                                                                                                   }
+                                                                                   },
+                                                                           "422":  {
+                                                                                       "description":  "Validation Error",
+                                                                                       "content":  {
+                                                                                                       "application/json":  {
+                                                                                                                                "schema":  {
+                                                                                                                                               "$ref":  "#/components/schemas/HTTPValidationError"
+                                                                                                                                           }
+                                                                                                                            }
+                                                                                                   }
+                                                                                   }
+                                                                       }
+                                                     }
+                                        },
+                  "/api/v1/locations/{location_id}":  {
+                                                          "get":  {
+                                                                      "summary":  "Get Location",
+                                                                      "description":  "Buscar locaÃ§Ã£o por ID",
+                                                                      "operationId":  "get_location_api_v1_locations__location_id__get",
+                                                                      "parameters":  [
+                                                                                         {
+                                                                                             "name":  "location_id",
+                                                                                             "in":  "path",
+                                                                                             "required":  true,
+                                                                                             "schema":  {
+                                                                                                            "type":  "integer",
+                                                                                                            "title":  "Location Id"
+                                                                                                        }
+                                                                                         }
+                                                                                     ],
+                                                                      "responses":  {
+                                                                                        "200":  {
+                                                                                                    "description":  "Successful Response",
+                                                                                                    "content":  {
+                                                                                                                    "application/json":  {
+                                                                                                                                             "schema":  {
+
+                                                                                                                                                        }
+                                                                                                                                         }
+                                                                                                                }
+                                                                                                },
+                                                                                        "422":  {
+                                                                                                    "description":  "Validation Error",
+                                                                                                    "content":  {
+                                                                                                                    "application/json":  {
+                                                                                                                                             "schema":  {
+                                                                                                                                                            "$ref":  "#/components/schemas/HTTPValidationError"
+                                                                                                                                                        }
+                                                                                                                                         }
+                                                                                                                }
+                                                                                                }
+                                                                                    }
+                                                                  }
+                                                      },
+                  "/api/v1/locations/{location_id}/firebase-photos":  {
+                                                                          "post":  {
+                                                                                       "summary":  "Add Firebase Photos",
+                                                                                       "description":  "Adicionar fotos do Firebase a uma locaÃ§Ã£o",
+                                                                                       "operationId":  "add_firebase_photos_api_v1_locations__location_id__firebase_photos_post",
+                                                                                       "parameters":  [
+                                                                                                          {
+                                                                                                              "name":  "location_id",
+                                                                                                              "in":  "path",
+                                                                                                              "required":  true,
+                                                                                                              "schema":  {
+                                                                                                                             "type":  "integer",
+                                                                                                                             "title":  "Location Id"
+                                                                                                                         }
+                                                                                                          }
+                                                                                                      ],
+                                                                                       "requestBody":  {
+                                                                                                           "required":  true,
+                                                                                                           "content":  {
+                                                                                                                           "application/x-www-form-urlencoded":  {
+                                                                                                                                                                     "schema":  {
+                                                                                                                                                                                    "$ref":  "#/components/schemas/Body_add_firebase_photos_api_v1_locations__location_id__firebase_photos_post"
+                                                                                                                                                                                }
+                                                                                                                                                                 }
+                                                                                                                       }
+                                                                                                       },
+                                                                                       "responses":  {
+                                                                                                         "200":  {
+                                                                                                                     "description":  "Successful Response",
+                                                                                                                     "content":  {
+                                                                                                                                     "application/json":  {
+                                                                                                                                                              "schema":  {
+
+                                                                                                                                                                         }
+                                                                                                                                                          }
+                                                                                                                                 }
+                                                                                                                 },
+                                                                                                         "422":  {
+                                                                                                                     "description":  "Validation Error",
+                                                                                                                     "content":  {
+                                                                                                                                     "application/json":  {
+                                                                                                                                                              "schema":  {
+                                                                                                                                                                             "$ref":  "#/components/schemas/HTTPValidationError"
+                                                                                                                                                                         }
+                                                                                                                                                          }
+                                                                                                                                 }
+                                                                                                                 }
+                                                                                                     }
+                                                                                   }
+                                                                      },
+                  "/api/v1/suppliers":  {
+                                            "get":  {
+                                                        "summary":  "Get Suppliers",
+                                                        "description":  "Buscar fornecedores",
+                                                        "operationId":  "get_suppliers_api_v1_suppliers_get",
+                                                        "responses":  {
+                                                                          "200":  {
+                                                                                      "description":  "Successful Response",
+                                                                                      "content":  {
+                                                                                                      "application/json":  {
+                                                                                                                               "schema":  {
+
+                                                                                                                                          }
+                                                                                                                           }
+                                                                                                  }
+                                                                                  }
+                                                                      }
+                                                    }
+                                        },
+                  "/api/v1/setup/status":  {
+                                               "get":  {
+                                                           "summary":  "Get Setup Status",
+                                                           "description":  "Verifica se o sistema jÃ¡ foi configurado",
+                                                           "operationId":  "get_setup_status_api_v1_setup_status_get",
+                                                           "responses":  {
+                                                                             "200":  {
+                                                                                         "description":  "Successful Response",
+                                                                                         "content":  {
+                                                                                                         "application/json":  {
+                                                                                                                                  "schema":  {
+
+                                                                                                                                             }
+                                                                                                                              }
+                                                                                                     }
+                                                                                     }
+                                                                         }
+                                                       }
+                                           },
+                  "/api/v1/tags":  {
+                                       "get":  {
+                                                   "summary":  "Get Tags",
+                                                   "description":  "Buscar tags",
+                                                   "operationId":  "get_tags_api_v1_tags_get",
+                                                   "responses":  {
+                                                                     "200":  {
+                                                                                 "description":  "Successful Response",
+                                                                                 "content":  {
+                                                                                                 "application/json":  {
+                                                                                                                          "schema":  {
+
+                                                                                                                                     }
+                                                                                                                      }
+                                                                                             }
+                                                                             }
+                                                                 }
+                                               }
+                                   },
+                  "/api/v1/notifications":  {
+                                                "get":  {
+                                                            "summary":  "Get Notifications",
+                                                            "description":  "Buscar notificaÃ§Ãµes",
+                                                            "operationId":  "get_notifications_api_v1_notifications_get",
+                                                            "parameters":  [
+                                                                               {
+                                                                                   "name":  "user_id",
+                                                                                   "in":  "query",
+                                                                                   "required":  false,
+                                                                                   "schema":  {
+                                                                                                  "type":  "integer",
+                                                                                                  "title":  "User Id"
+                                                                                              }
+                                                                               }
+                                                                           ],
+                                                            "responses":  {
+                                                                              "200":  {
+                                                                                          "description":  "Successful Response",
+                                                                                          "content":  {
+                                                                                                          "application/json":  {
+                                                                                                                                   "schema":  {
+
+                                                                                                                                              }
+                                                                                                                               }
+                                                                                                      }
+                                                                                      },
+                                                                              "422":  {
+                                                                                          "description":  "Validation Error",
+                                                                                          "content":  {
+                                                                                                          "application/json":  {
+                                                                                                                                   "schema":  {
+                                                                                                                                                  "$ref":  "#/components/schemas/HTTPValidationError"
+                                                                                                                                              }
+                                                                                                                               }
+                                                                                                      }
+                                                                                      }
+                                                                          }
+                                                        }
+                                            },
+                  "/api/v1/auth/me":  {
+                                          "get":  {
+                                                      "summary":  "Get Current User",
+                                                      "description":  "Obter usuÃ¡rio atual",
+                                                      "operationId":  "get_current_user_api_v1_auth_me_get",
+                                                      "responses":  {
+                                                                        "200":  {
+                                                                                    "description":  "Successful Response",
+                                                                                    "content":  {
+                                                                                                    "application/json":  {
+                                                                                                                             "schema":  {
+
+                                                                                                                                        }
+                                                                                                                         }
+                                                                                                }
+                                                                                }
+                                                                    }
+                                                  }
+                                      },
+                  "/api/v1/projects":  {
+                                           "get":  {
+                                                       "summary":  "Get Projects",
+                                                       "description":  "Buscar projetos",
+                                                       "operationId":  "get_projects_api_v1_projects_get",
+                                                       "responses":  {
+                                                                         "200":  {
+                                                                                     "description":  "Successful Response",
+                                                                                     "content":  {
+                                                                                                     "application/json":  {
+                                                                                                                              "schema":  {
+
+                                                                                                                                         }
+                                                                                                                          }
+                                                                                                 }
+                                                                                 }
+                                                                     }
+                                                   }
+                                       }
+              },
+    "components":  {
+                       "schemas":  {
+                                       "Body_add_firebase_photos_api_v1_locations__location_id__firebase_photos_post":  {
+                                                                                                                            "properties":  {
+                                                                                                                                               "firebase_photos":  {
+                                                                                                                                                                       "type":  "string",
+                                                                                                                                                                       "title":  "Firebase Photos"
+                                                                                                                                                                   }
+                                                                                                                                           },
+                                                                                                                            "type":  "object",
+                                                                                                                            "required":  [
+                                                                                                                                             "firebase_photos"
+                                                                                                                                         ],
+                                                                                                                            "title":  "Body_add_firebase_photos_api_v1_locations__location_id__firebase_photos_post"
+                                                                                                                        },
+                                       "HTTPValidationError":  {
+                                                                   "properties":  {
+                                                                                      "detail":  {
+                                                                                                     "items":  {
+                                                                                                                   "$ref":  "#/components/schemas/ValidationError"
+                                                                                                               },
+                                                                                                     "type":  "array",
+                                                                                                     "title":  "Detail"
+                                                                                                 }
+                                                                                  },
+                                                                   "type":  "object",
+                                                                   "title":  "HTTPValidationError"
+                                                               },
+                                       "ValidationError":  {
+                                                               "properties":  {
+                                                                                  "loc":  {
+                                                                                              "items":  {
+                                                                                                            "anyOf":  [
+                                                                                                                          {
+                                                                                                                              "type":  "string"
+                                                                                                                          },
+                                                                                                                          {
+                                                                                                                              "type":  "integer"
+                                                                                                                          }
+                                                                                                                      ]
+                                                                                                        },
+                                                                                              "type":  "array",
+                                                                                              "title":  "Location"
+                                                                                          },
+                                                                                  "msg":  {
+                                                                                              "type":  "string",
+                                                                                              "title":  "Message"
+                                                                                          },
+                                                                                  "type":  {
+                                                                                               "type":  "string",
+                                                                                               "title":  "Error Type"
+                                                                                           }
+                                                                              },
+                                                               "type":  "object",
+                                                               "required":  [
+                                                                                "loc",
+                                                                                "msg",
+                                                                                "type"
+                                                                            ],
+                                                               "title":  "ValidationError"
+                                                           }
+                                   }
+                   }
+}

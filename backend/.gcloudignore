@@ -1,0 +1,40 @@
+# Arquivos e pastas ignorados no contexto de build do Cloud Build / Cloud Run
+# Baseado em .gitignore + ajustes específicos
+
+# Ambientes virtuais
+venv/
+.venv/
+
+# Caches Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Uploads e artefatos locais
+uploads/
+*.db
+*.sqlite
+
+# Logs e temporários
+logs/
+*.log
+
+# Testes e dados de teste (não necessários em produção)
+tests/
+testdata/
+*.pytest_cache/
+.pytest_cache/
+
+# Scripts locais não essenciais para runtime
+scripts/
+
+# Credenciais de exemplo ou arquivos que não devem ir para imagem final
+firebase_service_account_example.json
+firebase_service_account*.json
+
+# Node / outros
+node_modules/
+
+# Outras
+.DS_Store

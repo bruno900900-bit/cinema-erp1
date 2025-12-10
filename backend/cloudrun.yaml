@@ -1,0 +1,39 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: cinema-erp-api
+  namespace: default
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: "0"
+        autoscaling.knative.dev/maxScale: "10"
+        run.googleapis.com/cpu-throttling: "true"
+    spec:
+      containers:
+        - image: gcr.io/PROJECT_ID/cinema-erp-api:latest
+          env:
+            - name: ENVIRONMENT
+              value: production
+            - name: DEBUG
+              value: "false"
+            - name: DATABASE_TYPE
+              value: firebase
+            - name: DATABASE_URL
+              value: sqlite:////tmp/cinema_erp.db
+            - name: FIREBASE_PROJECT_ID
+              value: palaoro-production
+            # opcional: bucket inferido pelo código
+            #- name: FIREBASE_STORAGE_BUCKET
+            #  value: palaoro-production.appspot.com
+          ports:
+            - containerPort: 8080
+          resources:
+            limits:
+              cpu: "1"
+              memory: "512Mi"
+            requests:
+              cpu: "0.25"
+              memory: "256Mi"
+      timeoutSeconds: 300
