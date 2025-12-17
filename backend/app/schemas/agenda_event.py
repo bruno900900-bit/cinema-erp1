@@ -10,10 +10,15 @@ class AgendaEventBase(BaseModel):
     status: EventStatus = Field(EventStatus.SCHEDULED, description="Status do evento")
 
     # Datas e horários
-    event_date: date = Field(..., description="Data do evento")
-    start_time: Optional[time] = Field(None, description="Horário de início")
-    end_time: Optional[time] = Field(None, description="Horário de fim")
-    is_all_day: bool = Field(False, description="Evento de dia inteiro")
+    # Datas e horários
+    start_date: str = Field(..., description="Data de início (ISO string)")
+    end_date: Optional[str] = Field(None, description="Data de fim (ISO string)")
+    all_day: bool = Field(False, description="Evento de dia inteiro")
+
+    # event_date: date ... (REMOVED)
+    # start_time: Optional[time] ... (REMOVED)
+    # end_time: Optional[time] ... (REMOVED)
+    # is_all_day ... (REPLACED by all_day)
 
     # Relacionamentos opcionais
     project_id: Optional[int] = Field(None, description="ID do projeto")
@@ -35,10 +40,13 @@ class AgendaEventUpdate(BaseModel):
     description: Optional[str] = None
     event_type: Optional[EventType] = None
     status: Optional[EventStatus] = None
-    event_date: Optional[date] = None
-    start_time: Optional[time] = None
-    end_time: Optional[time] = None
-    is_all_day: Optional[bool] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    all_day: Optional[bool] = None
+    # event_date: Optional[date] = None
+    # start_time: Optional[time] = None
+    # end_time: Optional[time] = None
+    # is_all_day: Optional[bool] = None
     project_id: Optional[int] = None
     location_id: Optional[int] = None
     project_location_id: Optional[int] = None

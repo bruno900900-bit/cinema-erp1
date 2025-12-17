@@ -203,7 +203,7 @@ class AgendaService {
       locationId: event.location_id,
       taskId: rawEvent.task_id?.toString(),
       priority,
-      isAllDay: event.is_all_day ?? true,
+      isAllDay: event.all_day ?? true,
       metadata: event.metadata_json || rawEvent.metadata,
     };
   }
@@ -473,14 +473,10 @@ class AgendaService {
   // Obter eventos de datas de produção das locações
   async getProductionDateEvents(projectId?: number): Promise<AgendaEvent[]> {
     try {
-      const params: any = {};
-      if (projectId) {
-        params.project_id = projectId;
-      }
-
-      const projectLocations = await projectLocationService.getProjectLocations(
-        params
-      );
+      // ✅ CORRIGIDO: passar projectId diretamente ao invés de objeto params
+      const projectLocations = projectId
+        ? await projectLocationService.getProjectLocations(projectId)
+        : await projectLocationService.getProjectLocations(0); // Get all if no projectId
       const productionEvents: AgendaEvent[] = [];
 
       for (const pl of projectLocations) {

@@ -1,4 +1,4 @@
-import { apiService } from './api';
+import { supabase } from '../config/supabaseClient';
 
 export interface DashboardStats {
   total_projects: number;
@@ -68,7 +68,36 @@ export interface FinancialSummary {
 class DashboardService {
   async getStats(): Promise<DashboardStats> {
     try {
-      return await apiService.get<DashboardStats>('/dashboard/stats');
+      // Executar queries em paralelo para performance
+      const [projects, locations, users] = await Promise.all([
+        supabase
+          .from('projects')
+          .select('status, budget, budget_spent', { count: 'exact' }),
+        supabase.from('locations').select('status', { count: 'exact' }),
+        supabase.from('users').select('id', { count: 'exact' }),
+      ]);
+
+      const activeProjects =
+        projects.data?.filter(p => p.status === 'active') || [];
+      const approvedLocations =
+        locations.data?.filter(l => l.status === 'approved') || [];
+
+      const totalBudget =
+        projects.data?.reduce((sum, p) => sum + (p.budget || 0), 0) || 0;
+      const budgetSpent =
+        projects.data?.reduce((sum, p) => sum + (p.budget_spent || 0), 0) || 0;
+
+      return {
+        total_projects: projects.count || 0,
+        active_projects: activeProjects.length,
+        total_locations: locations.count || 0,
+        approved_locations: approvedLocations.length,
+        total_budget: totalBudget,
+        budget_spent: budgetSpent,
+        budget_remaining: totalBudget - budgetSpent,
+        upcoming_events: 0, // Implementar se tabela events existir
+        active_users: users.count || 0,
+      };
     } catch (error) {
       console.error('Erro ao obter stats do dashboard:', error);
       return {
@@ -87,9 +116,30 @@ class DashboardService {
 
   async getActiveProjects(limit = 5): Promise<{ projects: ProjectSummary[] }> {
     try {
-      return await apiService.get<{ projects: ProjectSummary[] }>(
-        `/dashboard/projects?limit=${limit}`
-      );
+      const { data, error } = await supabase
+        .from('projects')
+        .select('*')
+        .eq('status', 'active')
+        .order('updated_at', { ascending: false })
+        .limit(limit);
+
+      if (error) throw error;
+
+      const projects = data.map((p: any) => ({
+        id: p.id,
+        name: p.name || p.title,
+        client_name: p.client_name,
+        status: p.status,
+        start_date: p.start_date,
+        end_date: p.end_date,
+        budget_total: p.budget || 0,
+        budget_spent: p.budget_spent || 0,
+        budget_progress:
+          p.budget > 0 ? ((p.budget_spent || 0) / p.budget) * 100 : 0,
+        location_count: 0, // Requires extra query
+      }));
+
+      return { projects };
     } catch (error) {
       console.error('Erro ao obter projetos ativos:', error);
       return { projects: [] };
@@ -97,23 +147,24 @@ class DashboardService {
   }
 
   async getUpcomingEvents(limit = 10): Promise<{ events: UpcomingEvent[] }> {
-    try {
-      return await apiService.get<{ events: UpcomingEvent[] }>(
-        `/dashboard/upcoming-events?limit=${limit}`
-      );
-    } catch (error) {
-      console.error('Erro ao obter eventos:', error);
-      return { events: [] };
-    }
+    // Placeholder - se tabela events não existir, retorna array vazio
+    return { events: [] };
   }
 
   async getRecentLocations(
     limit = 6
   ): Promise<{ locations: RecentLocation[] }> {
     try {
-      return await apiService.get<{ locations: RecentLocation[] }>(
-        `/dashboard/recent-locations?limit=${limit}`
-      );
+      const { data, error } = await supabase
+        .from('locations')
+        .select(
+          'id, title, city, state, status, cover_photo_url, space_type, price_day_cinema'
+        )
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+      if (error) throw error;
+      return { locations: (data as any[]) || [] };
     } catch (error) {
       console.error('Erro ao obter locações recentes:', error);
       return { locations: [] };
@@ -122,9 +173,42 @@ class DashboardService {
 
   async getFinancialSummary(): Promise<FinancialSummary> {
     try {
-      return await apiService.get<FinancialSummary>(
-        '/dashboard/financial-summary'
+      const { data: projects } = await supabase
+        .from('projects')
+        .select('id, name, title, budget, budget_spent');
+
+      const allProjects = projects || [];
+      const totalBudget = allProjects.reduce(
+        (sum, p) => sum + (p.budget || 0),
+        0
       );
+      const totalSpent = allProjects.reduce(
+        (sum, p) => sum + (p.budget_spent || 0),
+        0
+      );
+
+      const projectData = allProjects.map((p: any) => ({
+        id: p.id,
+        name: p.name || p.title,
+        budget_total: p.budget || 0,
+        budget_spent: p.budget_spent || 0,
+        remaining: (p.budget || 0) - (p.budget_spent || 0),
+      }));
+
+      // Sort by remaining budget (just as example) or overbudget
+      const topProjects = projectData
+        .sort((a, b) => b.budget_total - a.budget_total)
+        .slice(0, 5);
+
+      return {
+        total_budget: totalBudget,
+        total_spent: totalSpent,
+        remaining: totalBudget - totalSpent,
+        utilization_percent:
+          totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0,
+        projects_over_budget: projectData.filter(p => p.remaining < 0).length,
+        top_projects_by_budget: topProjects,
+      };
     } catch (error) {
       console.error('Erro ao obter resumo financeiro:', error);
       return {

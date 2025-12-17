@@ -1,29 +1,14 @@
-import { apiService } from './api';
+// Presentation Enrichment Service - Migrated to mock
+// AI enrichment requires backend processing
 
-export interface EnrichmentOptions {
-  improveTitles?: boolean;
-  generateNotes?: boolean;
-  fillMissingCaptions?: boolean;
-  executiveSummary?: boolean;
-}
+export const enrichPresentation = async (data: any): Promise<any> => {
+  console.warn('AI enrichment not available during migration');
+  return data; // Return unchanged data
+};
 
-export async function enrichPresentation(
-  payload: any,
-  options: EnrichmentOptions = {}
-) {
-  const body = {
-    presentation: payload,
-    options: {
-      improveTitles: options.improveTitles !== false,
-      generateNotes: options.generateNotes !== false,
-      fillMissingCaptions: options.fillMissingCaptions !== false,
-      executiveSummary: !!options.executiveSummary,
-    },
-  };
-  return apiService.post('/presentations/enrich', body);
-}
+export const exportEnrichedPresentation = async (data: any): Promise<Blob> => {
+  console.warn('Export enrichment not available during migration');
+  throw new Error('Exportação de apresentação temporariamente indisponível');
+};
 
-export async function exportServerPresentation(payload: any, useAI = false) {
-  const body = { presentation: payload, exportOptions: { useAI } };
-  return apiService.post('/presentations/export', body);
-}
+export default { enrichPresentation, exportEnrichedPresentation };

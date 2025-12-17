@@ -8,10 +8,14 @@ from ....schemas.project_location_stage import (
     ProjectLocationStageFilter,
     ProjectLocationStageProgress,
     ProjectLocationStageBulkUpdate,
-    ProjectLocationStageTemplate
+    ProjectLocationStageTemplate,
+    StageStatusUpdate,
+    StageHistoryResponse
 )
 from ....services.project_location_stage_service import ProjectLocationStageService
 from ....core.database import get_db
+from ....core.auth import get_current_user
+from ....models.user import User
 
 router = APIRouter(prefix="/project-location-stages", tags=["project-location-stages"])
 
@@ -188,3 +192,47 @@ def get_default_templates():
     templates = stage_service._get_default_templates()
 
     return {"templates": templates}
+
+@router.patch("/{stage_id}/status", response_model=ProjectLocationStageResponse)
+def update_stage_status(
+    stage_id: int,
+    status_update: StageStatusUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Atualiza o status de uma etapa com rastreamento de usuário"""
+    try:
+        stage_service = ProjectLocationStageService(db)
+        stage = stage_service.update_stage_status(
+            stage_id=stage_id,
+            new_status=status_update.status,
+            user_id=current_user.id,
+            notes=status_update.notes
+        )
+        return stage
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao atualizar status: {str(e)}")
+
+@router.get("/{stage_id}/history", response_model=List[StageHistoryResponse])
+def get_stage_history(
+    stage_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Retorna o histórico completo de mudanças de status de uma etapa"""
+    try:
+        stage_service = ProjectLocationStageService(db)
+
+        # Verifica se a etapa existe
+        stage = stage_service.get_stage(stage_id)
+        if not stage:
+            raise HTTPException(status_code=404, detail="Etapa não encontrada")
+
+        history = stage_service.get_stage_history(stage_id)
+        return history
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao buscar histórico: {str(e)}")

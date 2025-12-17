@@ -27,7 +27,7 @@ import {
 import { useFormik } from 'formik';
 import * as yup from 'yup';
 import { useAuth } from '../hooks/useAuth';
-import { apiService } from '../services/api';
+import { authService } from '../services/authService';
 
 // Validation schemas
 const loginSchema = yup.object({
@@ -119,11 +119,11 @@ export default function LoginPage() {
       setSuccess('');
       setLoading(true);
       try {
-        await apiService.post('/auth/register', {
-          full_name: values.full_name,
+        // Use Supabase Auth for registration
+        await authService.signUp({
           email: values.email,
-          phone: values.phone || null,
           password: values.password,
+          full_name: values.full_name,
         });
         setSuccess('Conta criada com sucesso! Você já pode fazer login.');
         setTabValue(0);

@@ -11,9 +11,15 @@ class EventType(str, enum.Enum):
     LOCATION_RENTAL_END = "location_rental_end"
     LOCATION_RENTAL_FULL = "location_rental_full"
     VISIT_SCHEDULED = "visit_scheduled"
+    TECHNICAL_VISIT = "technical_visit"
+    FILMING_START = "filming_start"
+    FILMING_END = "filming_end"
+    FILMING_PERIOD = "filming_period"
+    DELIVERY = "delivery"
     CONTRACT_SIGNED = "contract_signed"
     PAYMENT_DUE = "payment_due"
     CUSTOM = "custom"
+
 
 class EventStatus(str, enum.Enum):
     SCHEDULED = "scheduled"
@@ -33,10 +39,17 @@ class AgendaEvent(Base, TimestampMixin):
     status = Column(Enum(EventStatus), default=EventStatus.SCHEDULED)
 
     # Datas e horários
-    event_date = Column(Date, nullable=False)
-    start_time = Column(Time, nullable=True)
-    end_time = Column(Time, nullable=True)
-    is_all_day = Column(Boolean, default=False)
+    # Datas e horários
+    start_date = Column(String, nullable=False)  # Armazenado como ISO string no DB atual
+    end_date = Column(String, nullable=True)
+    all_day = Column(Boolean, default=False)
+
+    # Mantendo compatibilidade de nomes na classe se necessário, mas mapeando para colunas reais
+    # ou simplesmente alterando o modelo. Vamos alterar para refletir a realidade.
+    # event_date = ... (REMOVIDO - Não existe no banco)
+    # start_time = ... (REMOVIDO)
+    # end_time = ... (REMOVIDO)
+    # is_all_day = ... (REMOVIDO)
 
     # Relacionamentos opcionais
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=True)
@@ -58,7 +71,7 @@ class AgendaEvent(Base, TimestampMixin):
     contract = relationship("Contract")
 
     def __repr__(self):
-        return f"<AgendaEvent(id={self.id}, title='{self.title}', date='{self.event_date}', type='{self.event_type}')>"
+        return f"<AgendaEvent(id={self.id}, title='{self.title}', date='{self.start_date}', type='{self.event_type}')>"
 
     @classmethod
     def create_from_project_location(cls, project_location, event_type: EventType):
@@ -66,19 +79,18 @@ class AgendaEvent(Base, TimestampMixin):
         if event_type == EventType.LOCATION_RENTAL_START:
             title = f"Início da locação: {project_location.location.title}"
             description = f"Início da locação da locação '{project_location.location.title}' para o projeto '{project_location.project.name}'"
-            event_date = project_location.rental_start_date
-            start_time = project_location.rental_start_time
+            start_date = project_location.rental_start_date.isoformat() if project_location.rental_start_date else None
+            end_date = None
         elif event_type == EventType.LOCATION_RENTAL_END:
             title = f"Fim da locação: {project_location.location.title}"
             description = f"Fim da locação da locação '{project_location.location.title}' para o projeto '{project_location.project.name}'"
-            event_date = project_location.rental_end_date
-            start_time = project_location.rental_end_time
+            start_date = project_location.rental_end_date.isoformat() if project_location.rental_end_date else None
+            end_date = None
         elif event_type == EventType.LOCATION_RENTAL_FULL:
             title = f"Locação completa: {project_location.location.title}"
             description = f"Período completo da locação '{project_location.location.title}' para o projeto '{project_location.project.name}' ({project_location.total_days} dias)"
-            event_date = project_location.rental_start_date
-            start_time = project_location.rental_start_time
-            end_time = project_location.rental_end_time
+            start_date = project_location.rental_start_date.isoformat() if project_location.rental_start_date else None
+            end_date = project_location.rental_end_date.isoformat() if project_location.rental_end_date else None
         else:
             return None
 
@@ -86,9 +98,9 @@ class AgendaEvent(Base, TimestampMixin):
             title=title,
             description=description,
             event_type=event_type,
-            event_date=event_date,
-            start_time=start_time,
-            end_time=end_time,
+            start_date=start_date,
+            end_date=end_date,
+            all_day=False,
             project_id=project_location.project_id,
             location_id=project_location.location_id,
             project_location_id=project_location.id,
@@ -109,15 +121,15 @@ class AgendaEvent(Base, TimestampMixin):
         if event_type == EventType.PROJECT_CREATED:
             title = f"Projeto criado: {project.name}"
             description = f"Projeto '{project.name}' foi criado"
-            event_date = project.created_at.date()
+            start_date = project.created_at.date().isoformat() if hasattr(project.created_at, 'date') else str(project.created_at)
         elif event_type == EventType.PROJECT_START:
             title = f"Início do projeto: {project.name}"
             description = f"Início do projeto '{project.name}'"
-            event_date = project.start_date
+            start_date = project.start_date.isoformat() if hasattr(project.start_date, 'isoformat') else str(project.start_date)
         elif event_type == EventType.PROJECT_END:
             title = f"Fim do projeto: {project.name}"
             description = f"Fim do projeto '{project.name}'"
-            event_date = project.end_date
+            start_date = project.end_date.isoformat() if hasattr(project.end_date, 'isoformat') else str(project.end_date)
         else:
             return None
 
@@ -125,7 +137,9 @@ class AgendaEvent(Base, TimestampMixin):
             title=title,
             description=description,
             event_type=event_type,
-            event_date=event_date,
+            start_date=start_date,
+            end_date=None,
+            all_day=True,
             project_id=project.id,
             color="#9C27B0" if event_type == EventType.PROJECT_CREATED else "#4CAF50" if event_type == EventType.PROJECT_START else "#F44336",
             priority=1,

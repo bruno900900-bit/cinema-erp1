@@ -117,6 +117,16 @@ class UserPermissionsUpdate(BaseModel):
         ..., description="Mapa de permissões personalizadas (true/false por recurso)"
     )
 
+class UserCreateByAdmin(BaseModel):
+    """Schema para criação de usuário pelo administrador"""
+    email: EmailStr
+    full_name: str = Field(..., min_length=2, max_length=255)
+    role: UserRole = UserRole.CONTRIBUTOR
+    permissions_json: Optional[Dict[str, bool]] = None
+    send_welcome_email: bool = True
+    phone: Optional[str] = None
+    bio: Optional[str] = None
+
 class UserLogin(BaseModel):
     email: EmailStr
     password: str

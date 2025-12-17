@@ -1,299 +1,320 @@
-import { apiService, normalizeListResponse } from './api';
-import { User, UserRole, UserList } from '../types/user';
+// src/services/userService.ts
+import { supabase } from '../config/supabaseClient';
+import {
+  User,
+  UserRole,
+  UserList,
+  UserCreate,
+  UserUpdate,
+  UserPasswordChange,
+  UserBulkAction,
+  UserStats,
+} from '../types/user';
+import { withDiagnostic } from '../utils/withDiagnostic';
 
-export interface UserCreate {
-  email: string;
-  full_name: string;
-  password: string;
-  bio?: string;
-  phone?: string;
-  avatar_url?: string;
-  role?: UserRole;
-  timezone?: string;
-  locale?: string;
-}
+// Cache de requests em andamento para evitar duplicatas
+const pendingRequests = new Map<string, Promise<any>>();
 
-export interface UserUpdate {
-  email?: string;
-  full_name?: string;
-  bio?: string;
-  phone?: string;
-  avatar_url?: string;
-  role?: UserRole;
-  is_active?: boolean;
-  password?: string;
-  timezone?: string;
-  locale?: string;
-  preferences_json?: Record<string, unknown>;
-  permissions_json?: Record<string, unknown>;
-}
+/**
+ * Wrapper para requests com deduplication
+ * Evita múltiplas chamadas simultâneas para o mesmo recurso
+ */
+async function withDeduplication<T>(
+  key: string,
+  requestFn: () => Promise<T>
+): Promise<T> {
+  // Se já existe uma request em andamento, reutiliza
+  if (pendingRequests.has(key)) {
+    console.log(`🔄 Reusing pending user request for: ${key}`);
+    return pendingRequests.get(key) as Promise<T>;
+  }
 
-// UserList moved to types/user.ts
+  // Cria nova request
+  const request = requestFn().finally(() => {
+    // Remove do cache quando completar
+    pendingRequests.delete(key);
+  });
 
-export interface UserListResponse {
-  users: UserList[];
-  total: number;
-  page: number;
-  size: number;
-  total_pages: number;
-}
+  // Armazena no cache
+  pendingRequests.set(key, request);
 
-export interface UserPasswordChange {
-  current_password: string;
-  new_password: string;
-}
-
-export interface UserBulkAction {
-  user_ids: number[];
-  action: 'activate' | 'deactivate' | 'delete' | 'change_role';
-  role?: UserRole;
-}
-
-export interface UserStats {
-  total_users: number;
-  active_users: number;
-  inactive_users: number;
-  role_distribution: Record<string, number>;
+  return request;
 }
 
 export const userService = {
-  // Criar usuário
-  createUser: async (userData: UserCreate): Promise<User> => {
-    try {
-      const response = await apiService.post<User>('/users', userData);
-      return response;
-    } catch (error: any) {
-      console.error('Erro ao criar usuário:', error);
-      throw new Error(
-        error.message || error.response?.data?.detail || 'Erro ao criar usuário'
-      );
-    }
-  },
+  // Create user
+  createUser: (userData: UserCreate) =>
+    withDiagnostic('userService.createUser', async () => {
+      const payload = { ...userData, password_hash: 'managed_by_auth' };
+      // @ts-ignore: remove password if present
+      delete payload.password;
+      const { data, error } = await supabase
+        .from('users')
+        .insert([payload])
+        .select()
+        .single();
+      if (error) throw error;
+      return data as User;
+    }),
 
-  // Buscar usuários com filtros e paginação
-  getUsers: async (params?: {
+  // Create user as admin (with Supabase Auth integration)
+  createUserAsAdmin: (userData: {
+    email: string;
+    full_name: string;
+    role: UserRole;
+    permissions_json?: Record<string, boolean>;
+    phone?: string;
+    bio?: string;
+  }) =>
+    withDiagnostic('userService.createUserAsAdmin', async () => {
+      const { data, error } = await supabase
+        .from('users')
+        .insert([
+          {
+            email: userData.email,
+            full_name: userData.full_name,
+            role: userData.role,
+            permissions_json: userData.permissions_json || {},
+            phone: userData.phone,
+            bio: userData.bio,
+            is_active: true,
+            password_hash: '', // Managed by Supabase Auth
+          },
+        ])
+        .select()
+        .single();
+      if (error) throw error;
+      return data as User;
+    }),
+
+  // Get users with filters & pagination
+  getUsers: (params?: {
     skip?: number;
     limit?: number;
     search?: string;
     role?: UserRole;
     is_active?: boolean;
-  }): Promise<UserListResponse> => {
-    try {
-      const response = await apiService.get<any>('/users/', { params });
+  }) => {
+    const cacheKey = `users-${JSON.stringify(params || {})}`;
 
-      // Normalizar resposta se necessário
-      if (response && Array.isArray(response.users)) {
-        return response;
-      }
-
-      // Fallback para lista simples
-      if (Array.isArray(response)) {
+    return withDeduplication(cacheKey, () =>
+      withDiagnostic('userService.getUsers', async () => {
+        let query = supabase.from('users').select('*', { count: 'exact' });
+        if (params?.role) query = query.eq('role', params.role);
+        if (params?.is_active !== undefined)
+          query = query.eq('is_active', params.is_active);
+        if (params?.search) {
+          query = query.or(
+            `email.ilike.%${params.search}%,full_name.ilike.%${params.search}%`
+          );
+        }
+        if (params?.limit) {
+          const from = params.skip || 0;
+          const to = from + params.limit - 1;
+          query = query.range(from, to);
+        }
+        const { data, error, count } = await query;
+        if (error) throw error;
+        const size = params?.limit || 10;
+        const page =
+          params?.skip && params?.limit
+            ? Math.floor(params.skip / params.limit)
+            : 0;
+        const total = count || 0;
+        const total_pages = Math.ceil(total / size);
         return {
-          users: response,
-          total: response.length,
-          page: 0,
-          size: response.length,
-          total_pages: 1,
+          users: (data as UserList[]) || [],
+          total,
+          page,
+          size,
+          total_pages,
         };
+      })
+    );
+  },
+
+  // Get single user by ID
+  getUser: (userId: number) =>
+    withDiagnostic('userService.getUser', async () => {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .single();
+      if (error) throw error;
+      if (!data) throw new Error('User not found');
+      return data as User;
+    }),
+
+  // Update user
+  updateUser: (userId: number, userData: UserUpdate) =>
+    withDiagnostic('userService.updateUser', async () => {
+      const { data, error } = await supabase
+        .from('users')
+        .update(userData)
+        .eq('id', userId)
+        .select()
+        .single();
+      if (error) throw error;
+      return data as User;
+    }),
+
+  // Delete user
+  deleteUser: (userId: number) =>
+    withDiagnostic('userService.deleteUser', async () => {
+      const { error } = await supabase.from('users').delete().eq('id', userId);
+      if (error) throw error;
+    }),
+
+  // Activate user
+  activateUser: (userId: number) =>
+    withDiagnostic('userService.activateUser', async () => {
+      const { error } = await supabase
+        .from('users')
+        .update({ is_active: true })
+        .eq('id', userId);
+      if (error) throw error;
+    }),
+
+  // Deactivate user
+  deactivateUser: (userId: number) =>
+    withDiagnostic('userService.deactivateUser', async () => {
+      const { error } = await supabase
+        .from('users')
+        .update({ is_active: false })
+        .eq('id', userId);
+      if (error) throw error;
+    }),
+
+  // Change password – delegated to auth service
+  changePassword: async () => {
+    throw new Error('Use authService.changePassword() for password changes');
+  },
+
+  // Bulk actions
+  bulkAction: (actionData: UserBulkAction) =>
+    withDiagnostic('userService.bulkAction', async () => {
+      if (actionData.action === 'delete') {
+        const { error } = await supabase
+          .from('users')
+          .delete()
+          .in('id', actionData.user_ids);
+        if (error) throw error;
+      } else if (actionData.action === 'activate') {
+        const { error } = await supabase
+          .from('users')
+          .update({ is_active: true })
+          .in('id', actionData.user_ids);
+        if (error) throw error;
+      } else if (actionData.action === 'deactivate') {
+        const { error } = await supabase
+          .from('users')
+          .update({ is_active: false })
+          .in('id', actionData.user_ids);
+        if (error) throw error;
+      } else if (actionData.action === 'change_role' && actionData.role) {
+        const { error } = await supabase
+          .from('users')
+          .update({ role: actionData.role })
+          .in('id', actionData.user_ids);
+        if (error) throw error;
       }
+      return { success: true, message: 'Bulk action completed' };
+    }),
 
-      return {
-        users: [],
-        total: 0,
-        page: 0,
-        size: 10,
-        total_pages: 0,
-      };
-    } catch (error: any) {
-      console.error('Erro ao buscar usuários:', error);
-      throw new Error('Erro ao buscar lista de usuários');
-    }
-  },
+  // Users by role
+  getUsersByRole: (role: UserRole) =>
+    withDiagnostic('userService.getUsersByRole', async () => {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('role', role);
+      if (error) throw error;
+      return (data as UserList[]) || [];
+    }),
 
-  // Buscar usuário por ID
-  getUser: async (userId: number): Promise<User> => {
-    try {
-      const response = await apiService.get<User>(`/users/${userId}`);
-      return response;
-    } catch (error: any) {
-      console.error('Erro ao buscar usuário:', error);
-      throw new Error('Usuário não encontrado');
-    }
-  },
-
-  // Atualizar usuário
-  updateUser: async (userId: number, userData: UserUpdate): Promise<User> => {
-    try {
-      const response = await apiService.put<User>(`/users/${userId}`, userData);
-      return response;
-    } catch (error: any) {
-      console.error('Erro ao atualizar usuário:', error);
-      throw new Error('Erro ao atualizar usuário');
-    }
-  },
-
-  // Deletar usuário
-  deleteUser: async (userId: number): Promise<void> => {
-    try {
-      await apiService.delete(`/users/${userId}`);
-    } catch (error: any) {
-      console.error('Erro ao excluir usuário:', error);
-      throw new Error('Erro ao excluir usuário');
-    }
-  },
-
-  // Ativar usuário
-  activateUser: async (userId: number): Promise<void> => {
-    try {
-      await apiService.patch(`/users/${userId}/activate`);
-    } catch (error: any) {
-      console.error('Erro ao ativar usuário:', error);
-      throw new Error('Erro ao ativar usuário');
-    }
-  },
-
-  // Desativar usuário
-  deactivateUser: async (userId: number): Promise<void> => {
-    try {
-      await apiService.patch(`/users/${userId}/deactivate`);
-    } catch (error: any) {
-      console.error('Erro ao desativar usuário:', error);
-      throw new Error(error.message || 'Erro ao desativar usuário');
-    }
-  },
-
-  // Alterar senha
-  changePassword: async (
-    userId: number,
-    passwordData: UserPasswordChange
-  ): Promise<void> => {
-    try {
-      await apiService.patch(`/users/${userId}/change-password`, passwordData);
-    } catch (error: any) {
-      console.error('Erro ao alterar senha:', error);
-      throw new Error('Erro ao alterar senha');
-    }
-  },
-
-  // Ação em lote
-  bulkAction: async (
-    actionData: UserBulkAction
-  ): Promise<{ success: boolean; message: string }> => {
-    try {
-      const response = await apiService.post<{
-        success: boolean;
-        message: string;
-      }>('/users/bulk-action', actionData);
-      return response;
-    } catch (error: any) {
-      console.error('Erro na ação em lote:', error);
-      throw new Error('Não foi possível executar a ação em lote');
-    }
-  },
-
-  // Buscar usuários por role
-  getUsersByRole: async (role: UserRole): Promise<UserList[]> => {
-    try {
-      const response = await apiService.get<any>(`/users/role/${role}`);
-      return normalizeListResponse<UserList>(response, [
-        'users',
-        'items',
-        'results',
+  // User statistics
+  getUserStats: () =>
+    withDiagnostic('userService.getUserStats', async () => {
+      const [all, active, inactive, roles] = await Promise.all([
+        supabase.from('users').select('*', { count: 'exact', head: true }),
+        supabase
+          .from('users')
+          .select('*', { count: 'exact', head: true })
+          .eq('is_active', true),
+        supabase
+          .from('users')
+          .select('*', { count: 'exact', head: true })
+          .eq('is_active', false),
+        supabase.from('users').select('role'),
       ]);
-    } catch (error: any) {
-      console.error('Erro ao buscar usuários por role:', error);
-      return [];
-    }
-  },
-
-  // Estatísticas de usuários
-  getUserStats: async (): Promise<UserStats> => {
-    try {
-      const response = await apiService.get<UserStats>('/users/stats/summary');
-      return response;
-    } catch (error: any) {
-      console.error('Erro ao buscar estatísticas:', error);
-      // Retornar objeto vazio seguro em caso de erro
+      const roleDist: Record<string, number> = {};
+      (roles.data || []).forEach((u: any) => {
+        const r = u.role || 'unknown';
+        roleDist[r] = (roleDist[r] || 0) + 1;
+      });
       return {
-        total_users: 0,
-        active_users: 0,
-        inactive_users: 0,
-        role_distribution: {},
+        total_users: all.count || 0,
+        active_users: active.count || 0,
+        inactive_users: inactive.count || 0,
+        role_distribution: roleDist,
       };
-    }
-  },
+    }),
 
-  // Usuários disponíveis para atribuição
-  getUsersForAssignment: async (): Promise<UserList[]> => {
-    try {
-      const response = await apiService.get<any>('/users/assignment/available');
-      return normalizeListResponse<UserList>(response, [
-        'users',
-        'items',
-        'results',
-      ]);
-    } catch (error: any) {
-      console.error('Erro ao buscar usuários para atribuição:', error);
-      return [];
-    }
-  },
+  // Users for assignment (active only)
+  getUsersForAssignment: () =>
+    withDiagnostic('userService.getUsersForAssignment', async () => {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('is_active', true);
+      if (error) throw error;
+      return (data as UserList[]) || [];
+    }),
 
-  // Resumo de atividades do usuário
-  getUserActivitySummary: async (
-    userId: number
-  ): Promise<{ activities: unknown[]; summary: Record<string, unknown> }> => {
-    try {
-      const response = await apiService.get<{
-        activities: unknown[];
-        summary: Record<string, unknown>;
-      }>(`/users/${userId}/activity`);
-      return response;
-    } catch (error: any) {
-      console.error('Erro ao buscar resumo de atividades:', error);
-      return { activities: [], summary: {} };
-    }
-  },
+  // Current user profile
+  getMyProfile: () =>
+    withDiagnostic('userService.getMyProfile', async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user?.email) throw new Error('Not authenticated');
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', user.email)
+        .single();
+      if (error) throw error;
+      return data as User;
+    }),
 
-  // Perfil do usuário atual
-  getMyProfile: async (): Promise<User> => {
-    try {
-      const response = await apiService.get<User>('/users/me/profile');
-      return response;
-    } catch (error: any) {
-      console.error('Erro ao buscar perfil do usuário:', error);
-      throw new Error('Não foi possível carregar o perfil do usuário');
-    }
-  },
+  // Update current user profile
+  updateMyProfile: (userData: UserUpdate) =>
+    withDiagnostic('userService.updateMyProfile', async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user?.email) throw new Error('Not authenticated');
+      const { data, error } = await supabase
+        .from('users')
+        .update(userData)
+        .eq('email', user.email)
+        .select()
+        .single();
+      if (error) throw error;
+      return data as User;
+    }),
 
-  // Atualizar perfil do usuário atual
-  updateMyProfile: async (userData: UserUpdate): Promise<User> => {
-    try {
-      const response = await apiService.put<User>(
-        '/users/me/profile',
-        userData as Record<string, unknown>
-      );
-      return response;
-    } catch (error: any) {
-      console.error(
-        'Erro ao atualizar perfil do usuário:',
-        error?.response?.data || error
-      );
-      throw new Error('Não foi possível atualizar o perfil do usuário');
-    }
-  },
-
-  // Atualizar permissões do usuário
-  updateUserPermissions: async (
+  // Update user permissions
+  updateUserPermissions: (
     userId: number,
     permissions: Record<string, unknown>
-  ): Promise<void> => {
-    try {
-      await userService.updateUser(userId, { permissions_json: permissions });
-    } catch (error: any) {
-      console.error('Erro ao atualizar permissões do usuário:', error);
-      throw new Error('Não foi possível atualizar as permissões do usuário');
-    }
-  },
+  ) =>
+    withDiagnostic('userService.updateUserPermissions', async () => {
+      await userService.updateUser(userId, {
+        permissions_json: permissions,
+      } as any);
+    }),
 };
 
 export const getUserRoleLabel = (role: UserRole): string => {

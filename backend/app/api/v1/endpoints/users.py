@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any
-from ....schemas.user import UserCreate, UserUpdate, UserResponse, UserList, UserListResponse, UserPasswordChange, UserBulkAction
+from ....schemas.user import UserCreate, UserUpdate, UserResponse, UserList, UserListResponse, UserPasswordChange, UserBulkAction, UserCreateByAdmin
 from ....schemas.user_project import (
     UserProjectCreate, UserProjectUpdate, UserProjectResponse,
     UserProjectListResponse, BulkProjectAssignment, ProjectAccessLevel
@@ -27,6 +27,28 @@ def create_user(
         return user_service.create_user(user_data)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+@router.post("/admin/create-user", response_model=UserResponse)
+def admin_create_user(
+    user_data: UserCreateByAdmin,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_admin_user)
+):
+    """
+    Cria um novo usuário através do admin - cria no Supabase Auth e na tabela users
+    O usuário receberá um email para definir sua senha e poderá fazer login
+    Requer: role ADMIN
+    """
+    user_service = UserService(db)
+    try:
+        return user_service.create_user_as_admin(user_data)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao criar usuário admin: {str(e)}"
+        )
 
 @router.get("/", response_model=UserListResponse)
 def get_users(

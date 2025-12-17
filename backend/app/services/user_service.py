@@ -2,7 +2,7 @@ from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, func
 from ..models.user import User, UserRole
-from ..schemas.user import UserCreate, UserUpdate, UserResponse, UserList, UserListResponse, UserPasswordChange, UserBulkAction
+from ..schemas.user import UserCreate, UserUpdate, UserResponse, UserList, UserListResponse, UserPasswordChange, UserBulkAction, UserCreateByAdmin
 from ..core.auth import get_password_hash, verify_password
 
 class UserService:
@@ -30,6 +30,72 @@ class UserService:
         self.db.refresh(user)
 
         return UserResponse.model_validate(user)
+
+    def create_user_as_admin(self, user_data: 'UserCreateByAdmin') -> UserResponse:
+        """
+        Cria usuário pelo administrador - cria tanto no Supabase Auth quanto na tabela users
+        Permite que o usuário faça login imediatamente após definir senha
+        """
+        from config.supabase import get_supabase_admin
+        import secrets
+
+        # Verificar se email já existe na nossa tabela
+        existing_user = self.db.query(User).filter(User.email == user_data.email).first()
+        if existing_user:
+            raise ValueError("Email já está em uso")
+
+        try:
+            # 1. Criar usuário no Supabase Auth usando service role key
+            supabase_admin = get_supabase_admin()
+
+            # Gerar senha temporária aleatória (usuário mudará via email)
+            temp_password = secrets.token_urlsafe(16)
+
+            auth_response = supabase_admin.auth.admin.create_user({
+                "email": user_data.email,
+                "password": temp_password,
+                "email_confirm": False,  # Usuário precisa confirmar email
+                "user_metadata": {
+                    "full_name": user_data.full_name,
+                    "role": user_data.role.value
+                }
+            })
+
+            if not auth_response or not auth_response.user:
+                raise ValueError("Falha ao criar usuário no Supabase Auth")
+
+            auth_user_id = auth_response.user.id
+
+            # 2. Enviar email de redefinição de senha (usuário define própria senha)
+            if user_data.send_welcome_email:
+                supabase_admin.auth.admin.generate_link({
+                    "type": "recovery",
+                    "email": user_data.email
+                })
+
+            # 3. Criar registro na tabela users
+            user = User(
+                auth_id=str(auth_user_id),
+                email=user_data.email,
+                full_name=user_data.full_name,
+                role=user_data.role,
+                phone=user_data.phone,
+                bio=user_data.bio,
+                permissions_json=user_data.permissions_json or {},
+                is_active=True,
+                password_hash=get_password_hash(temp_password)  # Fallback, não será usado
+            )
+
+            self.db.add(user)
+            self.db.commit()
+            self.db.refresh(user)
+
+            return UserResponse.model_validate(user)
+
+        except Exception as e:
+            self.db.rollback()
+            # Se falhou, tentar limpar usuário do Auth se foi criado
+            raise ValueError(f"Erro ao criar usuário: {str(e)}")
 
     def get_user(self, user_id: int) -> Optional[UserResponse]:
         """Obtém um usuário por ID"""

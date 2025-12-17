@@ -19,6 +19,7 @@ from .audit_log import AuditLog, AuditAction
 from .visit import Visit, VisitParticipant, VisitEtapa, VisitStatus
 from .financial import FinancialMovement, BudgetAdjustment, MovementType, MovementStatus
 from .project_location_stage import ProjectLocationStage, StageStatus, LocationStageType
+from .project_location_stage_history import ProjectLocationStageHistory
 from .project_location import ProjectLocation, RentalStatus
 from .agenda_event import AgendaEvent, EventType, EventStatus
 from .user_project import UserProject, ProjectAccessLevel
@@ -44,6 +45,7 @@ __all__ = [
     "Visit", "VisitParticipant", "VisitEtapa", "VisitStatus",
     "FinancialMovement", "BudgetAdjustment", "MovementType", "MovementStatus",
     "ProjectLocationStage", "StageStatus", "LocationStageType",
+    "ProjectLocationStageHistory",
     "ProjectLocation", "RentalStatus",
     "AgendaEvent", "EventType", "EventStatus",
     "StageTask"

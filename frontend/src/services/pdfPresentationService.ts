@@ -227,12 +227,40 @@ export async function buildPresentationPdf({
       targetH: number
     ) => {
       try {
-        const resp = await fetch(asset.url);
+        let resp = await fetch(asset.url);
+
+        // If CORS fails, we might catch it in the catch block below.
+        // But if it returns 200 and valid body, we proceed.
+        if (!resp.ok) throw new Error(`Fetch failed: ${resp.status}`);
+
         const bytes = new Uint8Array(await resp.arrayBuffer());
-        const ext = asset.url.split('?')[0].split('.').pop()?.toLowerCase();
+        // Simple extension detection
+        const urlLower = asset.url.toLowerCase();
+        let isPng = urlLower.endsWith('.png');
+
+        // Try to guess from content-type if available
+        const cType = resp.headers.get('content-type');
+        if (cType && cType.includes('png')) isPng = true;
+        else if (cType && (cType.includes('jpeg') || cType.includes('jpg')))
+          isPng = false;
+
         let embedded;
-        if (ext === 'png') embedded = await pdfDoc.embedPng(bytes);
-        else embedded = await pdfDoc.embedJpg(bytes); // assume jpg fallback
+        if (isPng) {
+          try {
+            embedded = await pdfDoc.embedPng(bytes);
+          } catch (pngErr) {
+            // Fallback: try jpg if png fails (mismatched extension/content)
+            embedded = await pdfDoc.embedJpg(bytes);
+          }
+        } else {
+          try {
+            embedded = await pdfDoc.embedJpg(bytes);
+          } catch (jpgErr) {
+            // Fallback: try png
+            embedded = await pdfDoc.embedPng(bytes);
+          }
+        }
+
         const { width: iw, height: ih } = embedded.size();
         const ratio = Math.min(targetW / iw, targetH / ih);
         const drawW = iw * ratio;
@@ -255,7 +283,19 @@ export async function buildPresentationPdf({
           });
         }
       } catch (e) {
-        console.warn('Falha ao embutir imagem', asset.url, e);
+        console.warn(
+          'Falha ao embutir imagem (pode ser CORS ou formato):',
+          asset.url,
+          e
+        );
+        // Draw separate placeholder to indicate missing image
+        page.drawText('Imagem não disponível', {
+          x: targetX + targetW / 2 - 50,
+          y: targetY + targetH / 2,
+          size: 12,
+          font,
+          color: rgb(0.5, 0.5, 0.5),
+        });
       }
     };
 

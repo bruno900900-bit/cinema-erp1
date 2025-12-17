@@ -69,12 +69,20 @@ import {
 } from '../services/userService';
 import { UserRole, UserList, User } from '../types/user';
 import UserDetailModal from '../components/Users/UserDetailModal';
+import UserCreateModal from '../components/Users/UserCreateModal';
 import UserRegistrationModal from '../components/Users/UserRegistrationModal';
 import UserRegistrationNotification from '../components/Users/UserRegistrationNotification';
 import UserPermissionsModal from '../components/Users/UserPermissionsModal';
 import UserProjectAccessModal from '../components/Users/UserProjectAccessModal';
 import { usePermissions } from '../hooks/usePermissions';
 import { FolderOpen as ProjectsIcon } from '@mui/icons-material';
+import UnauthorizedPage from '../pages/UnauthorizedPage';
+import {
+  useOptimizedQuery,
+  useReferenceQuery,
+} from '../hooks/useOptimizedQuery';
+import { useDebounce } from '../hooks/useDebounce';
+import SkeletonUserRow from '../components/Common/SkeletonUserRow';
 
 interface UserFilters {
   search: string;
@@ -96,6 +104,13 @@ export default function UsersPage() {
   const permissions = usePermissions();
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
+
+  // Estado local para busca (atualiza imediatamente)
+  const [searchInput, setSearchInput] = useState('');
+
+  // Busca debounced (só atualiza após 500ms sem digitar)
+  const debouncedSearch = useDebounce(searchInput, 500);
+
   const [filters, setFilters] = useState<UserFilters>({
     search: '',
     role: '',
@@ -111,6 +126,7 @@ export default function UsersPage() {
   const [isProjectAccessDialogOpen, setIsProjectAccessDialogOpen] =
     useState(false);
   const [selectedUser, setSelectedUser] = useState<UserList | null>(null);
+  const [userToDelete, setUserToDelete] = useState<UserList | null>(null);
   const [selectedUserDetail, setSelectedUserDetail] = useState<User | null>(
     null
   );
@@ -133,12 +149,20 @@ export default function UsersPage() {
     locale: 'pt-BR',
   });
 
-  // Queries
+  // Atualizar filters.search quando debouncedSearch mudar
+  useEffect(() => {
+    setFilters(prev => ({
+      ...prev,
+      search: debouncedSearch,
+    }));
+  }, [debouncedSearch]);
+
+  // Queries - Otimizadas
   const {
     data: usersData,
     isLoading: usersLoading,
     error: usersError,
-  } = useQuery({
+  } = useOptimizedQuery({
     queryKey: ['users', page, rowsPerPage, filters],
     queryFn: () =>
       userService.getUsers({
@@ -153,17 +177,13 @@ export default function UsersPage() {
             ? false
             : undefined,
       }),
-    staleTime: 2 * 60 * 1000,
-    gcTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: false,
+    dataCategory: 'dynamic', // Dados que mudam com frequência
   });
 
-  const { data: statsData } = useQuery({
+  const { data: statsData } = useReferenceQuery({
     queryKey: ['user-stats'],
     queryFn: () => userService.getUserStats(),
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
-    refetchOnWindowFocus: false,
+    // useReferenceQuery já aplica staleTime: 10min, gcTime: 30min
   });
 
   // Mutations
@@ -312,8 +332,13 @@ export default function UsersPage() {
   };
 
   const handleDeleteUser = () => {
-    if (selectedUser) {
-      deleteUserMutation.mutate(selectedUser.id);
+    console.log('🗑️ handleDeleteUser called, userToDelete:', userToDelete);
+    if (userToDelete) {
+      console.log('🗑️ Calling deleteUserMutation with id:', userToDelete.id);
+      deleteUserMutation.mutate(userToDelete.id);
+      setUserToDelete(null); // Clear after deletion attempt
+    } else {
+      console.error('🗑️ No userToDelete!');
     }
   };
 
@@ -337,7 +362,8 @@ export default function UsersPage() {
   };
 
   const openDeleteDialog = (user: UserList) => {
-    setSelectedUser(user);
+    console.log('📝 openDeleteDialog called with user:', user);
+    setUserToDelete(user); // Use separate state for deletion
     setIsDeleteDialogOpen(true);
   };
 
@@ -539,8 +565,8 @@ export default function UsersPage() {
             <TextField
               fullWidth
               placeholder="Buscar usuários..."
-              value={filters.search}
-              onChange={e => handleFilterChange('search', e.target.value)}
+              value={searchInput}
+              onChange={e => setSearchInput(e.target.value)}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
@@ -548,6 +574,11 @@ export default function UsersPage() {
                   </InputAdornment>
                 ),
               }}
+              helperText={
+                searchInput && searchInput !== debouncedSearch
+                  ? 'Pesquisando...'
+                  : undefined
+              }
             />
           </Grid>
           <Grid item xs={12} md={3}>
@@ -613,11 +644,10 @@ export default function UsersPage() {
             </TableHead>
             <TableBody>
               {usersLoading ? (
-                <TableRow>
-                  <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
-                    <CircularProgress />
-                  </TableCell>
-                </TableRow>
+                // Skeleton loaders ao invés de spinner genérico
+                Array.from({ length: rowsPerPage }).map((_, index) => (
+                  <SkeletonUserRow key={`skeleton-${index}`} />
+                ))
               ) : users.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
@@ -1032,13 +1062,16 @@ export default function UsersPage() {
       {/* Delete Confirmation Dialog */}
       <Dialog
         open={isDeleteDialogOpen}
-        onClose={() => setIsDeleteDialogOpen(false)}
+        onClose={() => {
+          setIsDeleteDialogOpen(false);
+          setUserToDelete(null);
+        }}
       >
         <DialogTitle>Confirmar Exclusão</DialogTitle>
         <DialogContent>
           <Typography>
             Tem certeza que deseja excluir o usuário{' '}
-            <strong>{selectedUser?.full_name}</strong>? Esta ação não pode ser
+            <strong>{userToDelete?.full_name}</strong>? Esta ação não pode ser
             desfeita.
           </Typography>
         </DialogContent>

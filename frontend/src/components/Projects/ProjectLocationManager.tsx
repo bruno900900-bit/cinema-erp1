@@ -45,6 +45,7 @@ import {
   Info,
   PhotoCamera,
   Image as ImageIcon,
+  CalendarToday,
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -82,6 +83,11 @@ export default function ProjectLocationManager({
     rental_end_time: '',
     daily_rate: 0,
     hourly_rate: 0,
+    visit_date: '',
+    technical_visit_date: '',
+    filming_start_date: '',
+    filming_end_date: '',
+    delivery_date: '',
   });
   const [expandedLocation, setExpandedLocation] = useState<number | null>(null);
 
@@ -195,6 +201,11 @@ export default function ProjectLocationManager({
       rental_end_time: '',
       daily_rate: 0,
       hourly_rate: 0,
+      visit_date: '',
+      technical_visit_date: '',
+      filming_start_date: '',
+      filming_end_date: '',
+      delivery_date: '',
     });
   };
 
@@ -218,6 +229,11 @@ export default function ProjectLocationManager({
       responsible_user_id: location.responsible_user_id,
       coordinator_user_id: location.coordinator_user_id,
       notes: location.notes,
+      visit_date: location.visit_date || '',
+      technical_visit_date: location.technical_visit_date || '',
+      filming_start_date: location.filming_start_date || '',
+      filming_end_date: location.filming_end_date || '',
+      delivery_date: location.delivery_date || '',
     });
     setIsEditDialogOpen(true);
   };
@@ -830,6 +846,97 @@ export default function ProjectLocationManager({
                   setFormData(prev => ({ ...prev, notes: e.target.value }))
                 }
                 fullWidth
+              />
+            </Grid>
+
+            {/* Datas de Produção */}
+            <Grid item xs={12}>
+              <Typography
+                variant="h6"
+                sx={{
+                  mt: 2,
+                  mb: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
+                }}
+              >
+                <CalendarToday fontSize="small" /> Datas de Produção
+              </Typography>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                label="Data de Visitação"
+                type="date"
+                value={formData.visit_date || ''}
+                onChange={e =>
+                  setFormData(prev => ({ ...prev, visit_date: e.target.value }))
+                }
+                fullWidth
+                InputLabelProps={{ shrink: true }}
+                helperText="Primeira visita ao local"
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                label="Visita Técnica"
+                type="date"
+                value={formData.technical_visit_date || ''}
+                onChange={e =>
+                  setFormData(prev => ({
+                    ...prev,
+                    technical_visit_date: e.target.value,
+                  }))
+                }
+                fullWidth
+                InputLabelProps={{ shrink: true }}
+                helperText="Avaliação técnica"
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                label="Início de Gravação"
+                type="date"
+                value={formData.filming_start_date || ''}
+                onChange={e =>
+                  setFormData(prev => ({
+                    ...prev,
+                    filming_start_date: e.target.value,
+                  }))
+                }
+                fullWidth
+                InputLabelProps={{ shrink: true }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                label="Fim de Gravação"
+                type="date"
+                value={formData.filming_end_date || ''}
+                onChange={e =>
+                  setFormData(prev => ({
+                    ...prev,
+                    filming_end_date: e.target.value,
+                  }))
+                }
+                fullWidth
+                InputLabelProps={{ shrink: true }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                label="Entrega da Locação"
+                type="date"
+                value={formData.delivery_date || ''}
+                onChange={e =>
+                  setFormData(prev => ({
+                    ...prev,
+                    delivery_date: e.target.value,
+                  }))
+                }
+                fullWidth
+                InputLabelProps={{ shrink: true }}
+                helperText="Data de devolução do local"
               />
             </Grid>
             {formData.rental_start_date && formData.rental_end_date && (

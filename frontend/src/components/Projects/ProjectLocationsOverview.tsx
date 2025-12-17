@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import {
   Box,
   Card,
@@ -53,6 +53,8 @@ import { projectLocationStageService } from '../../services/projectLocationStage
 import { userService } from '../../services/userService';
 import { formatDateBR } from '../../utils/date';
 import LocationStageTimeline from './LocationStageTimeline';
+import SimpleStageList from './SimpleStageList';
+import LocationStagesLoader from './LocationStagesLoader';
 import { useAuth } from '../../hooks/useAuth';
 
 interface ProjectLocationsOverviewProps {
@@ -108,29 +110,33 @@ export default function ProjectLocationsOverview({
       projectLocationService.getProjectLocations(Number(projectId)),
   });
 
-  // Buscar usuários para exibir responsáveis
-  const { data: users = [] } = useQuery({
+  // Buscar usuÃ¡rios para exibir responsÃ¡veis
+  const { data: usersData } = useQuery({
     queryKey: ['users'],
     queryFn: () => userService.getUsers(),
   });
 
+  // Extrair array de users da resposta paginada
+  const users = Array.isArray(usersData) ? usersData : usersData?.users || [];
+
   // Mutation para atualizar status de etapa
   const updateStageMutation = useMutation({
-    mutationFn: ({
+    mutationFn: async ({
       stageId,
-      updates,
+      status,
     }: {
       stageId: number;
-      updates: {
-        status?: StageStatus;
-        completion_percentage?: number;
-        modified_by_user_id?: number;
-      };
-    }) => projectLocationStageService.updateStage(stageId, updates),
+      status: StageStatus;
+    }) => projectLocationStageService.updateStageStatus(stageId, status),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ['project-locations', projectId],
       });
+      // toast.success('Status da etapa atualizado com sucesso!'); // Assuming toast is imported
+    },
+    onError: (error: any) => {
+      console.error('Error updating stage status:', error);
+      // toast.error('Erro ao atualizar status: ' + error.message); // Assuming toast is imported
     },
   });
 
@@ -148,19 +154,16 @@ export default function ProjectLocationsOverview({
   const handleStageStatusUpdate = (stageId: number, newStatus: StageStatus) => {
     updateStageMutation.mutate({
       stageId,
-      updates: {
-        status: newStatus,
-        modified_by_user_id: user?.id ? Number(user.id) : undefined,
-      },
+      status: newStatus,
     });
   };
 
   const getUserById = (userId?: number): User | undefined => {
-    if (!userId) return undefined;
+    if (!userId || !Array.isArray(users)) return undefined;
     return users.find(u => Number(u.id) === userId);
   };
 
-  // Calcular estatísticas gerais
+  // Calcular estatÃ­sticas gerais
   const totalLocations = projectLocations.length;
   const completedLocations = projectLocations.filter(
     loc => loc.status === 'returned' || loc.completion_percentage === 100
@@ -248,7 +251,7 @@ export default function ProjectLocationsOverview({
                 {completedLocations}
               </Typography>
               <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                Concluídas
+                ConcluÃ­das
               </Typography>
             </Box>
           </Grid>
@@ -300,16 +303,21 @@ export default function ProjectLocationsOverview({
         </Alert>
       ) : (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {projectLocations.map(location => {
+          {projectLocations.map((location: ProjectLocation) => {
             const isExpanded = expandedLocationId === location.id;
+
             const responsibleUser = getUserById(location.responsible_user_id);
             const coordinatorUser = getUserById(location.coordinator_user_id);
+
+            // Calculate stage statistics
             const stages = location.stages || [];
             const completedStages = stages.filter(
-              s => s.status === StageStatus.COMPLETED
+              (s: any) => s.status === 'completed'
             ).length;
             const progressPercentage =
-              stages.length > 0 ? (completedStages / stages.length) * 100 : 0;
+              stages.length > 0
+                ? Math.round((completedStages / stages.length) * 100)
+                : 0;
 
             return (
               <Card
@@ -328,21 +336,6 @@ export default function ProjectLocationsOverview({
                   },
                 }}
               >
-                {/* Barra de progresso no topo */}
-                <LinearProgress
-                  variant="determinate"
-                  value={progressPercentage}
-                  sx={{
-                    height: 4,
-                    backgroundColor: 'rgba(0,0,0,0.05)',
-                    '& .MuiLinearProgress-bar': {
-                      backgroundColor: location.is_overdue
-                        ? '#f44336'
-                        : '#4caf50',
-                    },
-                  }}
-                />
-
                 <CardContent sx={{ p: 3 }}>
                   {/* Cabeçalho da Locação */}
                   <Box
@@ -417,6 +410,80 @@ export default function ProjectLocationsOverview({
                           />
                         )}
                       </Box>
+
+                      {/* Datas Importantes */}
+                      {(location.visit_date ||
+                        location.technical_visit_date ||
+                        location.filming_start_date ||
+                        location.delivery_date) && (
+                        <Box
+                          sx={{
+                            mt: 1.5,
+                            display: 'flex',
+                            gap: 0.5,
+                            flexWrap: 'wrap',
+                          }}
+                        >
+                          {location.visit_date && (
+                            <Chip
+                              label={`📅 Visitação: ${formatDateBR(
+                                location.visit_date
+                              )}`}
+                              size="small"
+                              sx={{
+                                backgroundColor: '#e8f5e9',
+                                color: '#2e7d32',
+                                fontSize: '0.7rem',
+                              }}
+                            />
+                          )}
+                          {location.technical_visit_date && (
+                            <Chip
+                              label={`🔧 Visita Técnica: ${formatDateBR(
+                                location.technical_visit_date
+                              )}`}
+                              size="small"
+                              sx={{
+                                backgroundColor: '#e3f2fd',
+                                color: '#1565c0',
+                                fontSize: '0.7rem',
+                              }}
+                            />
+                          )}
+                          {location.filming_start_date && (
+                            <Chip
+                              label={`🎬 Gravação: ${formatDateBR(
+                                location.filming_start_date
+                              )}${
+                                location.filming_end_date
+                                  ? ` - ${formatDateBR(
+                                      location.filming_end_date
+                                    )}`
+                                  : ''
+                              }`}
+                              size="small"
+                              sx={{
+                                backgroundColor: '#fff3e0',
+                                color: '#e65100',
+                                fontSize: '0.7rem',
+                              }}
+                            />
+                          )}
+                          {location.delivery_date && (
+                            <Chip
+                              label={`📦 Entrega: ${formatDateBR(
+                                location.delivery_date
+                              )}`}
+                              size="small"
+                              sx={{
+                                backgroundColor: '#ffebee',
+                                color: '#c62828',
+                                fontSize: '0.7rem',
+                              }}
+                            />
+                          )}
+                        </Box>
+                      )}
                     </Box>
 
                     <Box
@@ -427,11 +494,11 @@ export default function ProjectLocationsOverview({
                         gap: 1,
                       }}
                     >
-                      {/* Responsáveis */}
+                      {/* ResponsÃ¡veis */}
                       <AvatarGroup max={3} sx={{ mb: 1 }}>
                         {responsibleUser && (
                           <Tooltip
-                            title={`Responsável: ${responsibleUser.full_name}`}
+                            title={`ResponsÃ¡vel: ${responsibleUser.full_name}`}
                           >
                             <Avatar
                               src={responsibleUser.avatar_url}
@@ -503,11 +570,11 @@ export default function ProjectLocationsOverview({
                     </Box>
                   </Box>
 
-                  {/* Timeline de Etapas (resumida) */}
-                  <LocationStageTimeline
-                    stages={stages}
-                    compact={!isExpanded}
-                    onStageClick={stage => console.log('Stage clicked:', stage)}
+                  {/* Timeline de Etapas */}
+                  <LocationStagesLoader
+                    projectId={projectId}
+                    location={location}
+                    isExpanded={isExpanded}
                     onStageStatusUpdate={handleStageStatusUpdate}
                   />
 
@@ -659,6 +726,71 @@ export default function ProjectLocationsOverview({
                             {location.notes || 'Nenhuma nota adicionada.'}
                           </Typography>
                         </Grid>
+
+                        {/* Etapas do Processo */}
+                        <Grid item xs={12}>
+                          <Divider sx={{ my: 2 }} />
+                          <Typography
+                            variant="subtitle2"
+                            gutterBottom
+                            sx={{ mb: 2 }}
+                          >
+                            📋 Etapas do Processo
+                          </Typography>
+                          {location.stages && location.stages.length > 0 ? (
+                            <SimpleStageList stages={location.stages} />
+                          ) : (
+                            <Paper
+                              sx={{
+                                p: 3,
+                                textAlign: 'center',
+                                backgroundColor: 'background.default',
+                                borderRadius: 2,
+                              }}
+                            >
+                              <Schedule
+                                sx={{
+                                  fontSize: 40,
+                                  color: 'text.secondary',
+                                  mb: 1,
+                                }}
+                              />
+                              <Typography
+                                variant="body2"
+                                color="text.secondary"
+                                gutterBottom
+                              >
+                                Nenhuma etapa cadastrada ainda
+                              </Typography>
+                              <Button
+                                variant="outlined"
+                                size="small"
+                                startIcon={<Add />}
+                                sx={{ mt: 1 }}
+                                onClick={async () => {
+                                  try {
+                                    await projectLocationStageService.createDefaultStages(
+                                      location.id
+                                    );
+                                    queryClient.invalidateQueries({
+                                      queryKey: [
+                                        'project-locations',
+                                        projectId,
+                                      ],
+                                    });
+                                  } catch (error) {
+                                    console.error(
+                                      'Erro ao criar etapas:',
+                                      error
+                                    );
+                                  }
+                                }}
+                              >
+                                Criar Etapas Padrão
+                              </Button>
+                            </Paper>
+                          )}
+                        </Grid>
                       </Grid>
                     </Box>
                   )}
@@ -690,11 +822,62 @@ export default function ProjectLocationsOverview({
               <Typography variant="h6" gutterBottom>
                 Etapas do Processo
               </Typography>
-              <LocationStageTimeline
-                stages={selectedLocation.stages || []}
-                compact={false}
-                onStageStatusUpdate={handleStageStatusUpdate}
-              />
+              {selectedLocation.stages && selectedLocation.stages.length > 0 ? (
+                <SimpleStageList stages={selectedLocation.stages} />
+              ) : (
+                <Paper
+                  sx={{
+                    p: 3,
+                    textAlign: 'center',
+                    backgroundColor: 'action.hover',
+                    borderRadius: 2,
+                  }}
+                >
+                  <Schedule
+                    sx={{ fontSize: 48, color: 'text.secondary', mb: 1 }}
+                  />
+                  <Typography
+                    variant="body1"
+                    color="text.secondary"
+                    gutterBottom
+                  >
+                    Nenhuma etapa cadastrada ainda
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    As etapas do processo serão exibidas aqui quando forem
+                    criadas
+                  </Typography>
+                  <Button
+                    variant="contained"
+                    startIcon={<Add />}
+                    onClick={async () => {
+                      if (!selectedLocation) return;
+                      try {
+                        await projectLocationStageService.createDefaultStages(
+                          selectedLocation.id
+                        );
+                        // Invalidar cache do React Query para refresh automático
+                        queryClient.invalidateQueries({
+                          queryKey: ['project-locations'],
+                        });
+                        queryClient.invalidateQueries({
+                          queryKey: ['project-stages'],
+                        });
+                        // Fechar e reabrir dialog
+                        setDetailDialogOpen(false);
+                        setTimeout(() => {
+                          setDetailDialogOpen(true);
+                        }, 300);
+                      } catch (error) {
+                        console.error('Erro ao criar etapas:', error);
+                      }
+                    }}
+                    sx={{ mt: 2 }}
+                  >
+                    Criar Etapas Padrão
+                  </Button>
+                </Paper>
+              )}
             </Box>
           )}
         </DialogContent>

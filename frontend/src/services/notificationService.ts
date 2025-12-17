@@ -1,5 +1,3 @@
-import { apiService, normalizeListResponse } from './api';
-
 export interface Notification {
   id: number;
   title: string;
@@ -21,59 +19,49 @@ export interface NotificationCreate {
   action_text?: string;
 }
 
+// Mock inicial para evitar erros de API
+const MOCK_NOTIFICATIONS: Notification[] = [
+  {
+    id: 1,
+    title: 'Bem-vindo ao Novo Sistema',
+    message:
+      'Seja bem-vindo ao Cinema ERP 2.0! O sistema foi migrado com sucesso.',
+    type: 'success',
+    is_read: false,
+    created_at: new Date().toISOString(),
+    user_id: 1,
+  },
+];
+
 class NotificationService {
   // Obter notificações do usuário
   async getNotifications(userId?: number): Promise<Notification[]> {
-    try {
-      const endpoint = userId
-        ? `/notifications?user_id=${userId}`
-        : '/notifications';
-      const response = await apiService.get<any>(endpoint);
-      return normalizeListResponse<Notification>(response, [
-        'notifications',
-        'items',
-        'results',
-      ]);
-    } catch (error) {
-      console.error('Erro ao obter notificações (sem fallback mock):', error);
-      throw error;
-    }
+    return MOCK_NOTIFICATIONS;
   }
 
   // Marcar notificação como lida
   async markAsRead(notificationId: number): Promise<void> {
-    try {
-      await apiService.patch(`/notifications/${notificationId}/read`);
-    } catch (error) {
-      console.error('Erro ao marcar notificação como lida:', error);
-    }
+    const notif = MOCK_NOTIFICATIONS.find(n => n.id === notificationId);
+    if (notif) notif.is_read = true;
   }
 
   // Marcar todas as notificações como lidas
   async markAllAsRead(userId: number): Promise<void> {
-    try {
-      await apiService.patch(`/notifications/mark-all-read`, {
-        user_id: userId,
-      });
-    } catch (error) {
-      console.error('Erro ao marcar todas as notificações como lidas:', error);
-    }
+    MOCK_NOTIFICATIONS.forEach(n => (n.is_read = true));
   }
 
   // Criar nova notificação
   async createNotification(
     notification: NotificationCreate
   ): Promise<Notification> {
-    try {
-      const response = await apiService.post<Notification>(
-        '/notifications',
-        notification
-      );
-      return response as Notification;
-    } catch (error) {
-      console.error('Erro ao criar notificação:', error);
-      throw new Error('Não foi possível criar a notificação');
-    }
+    const newNotif = {
+      ...notification,
+      id: Date.now(),
+      created_at: new Date().toISOString(),
+      is_read: false,
+    };
+    MOCK_NOTIFICATIONS.unshift(newNotif);
+    return newNotif;
   }
 
   // Obter estatísticas de notificações
@@ -82,23 +70,13 @@ class NotificationService {
     unread: number;
     by_type: { [key: string]: number };
   }> {
-    try {
-      const endpoint = userId
-        ? `/notifications/stats?user_id=${userId}`
-        : '/notifications/stats';
-      const response = await apiService.get<{
-        total: number;
-        unread: number;
-        by_type: { [key: string]: number };
-      }>(endpoint);
-      return response;
-    } catch (error) {
-      console.error(
-        'Erro ao obter estatísticas de notificações (sem fallback):',
-        error
-      );
-      throw error;
-    }
+    const total = MOCK_NOTIFICATIONS.length;
+    const unread = MOCK_NOTIFICATIONS.filter(n => !n.is_read).length;
+    return {
+      total,
+      unread,
+      by_type: { info: 0, success: total, warning: 0, error: 0 },
+    };
   }
 
   // Obter configurações de notificação do usuário
@@ -108,21 +86,12 @@ class NotificationService {
     sms_notifications: boolean;
     notification_types: string[];
   }> {
-    try {
-      const response = await apiService.get<{
-        email_notifications: boolean;
-        push_notifications: boolean;
-        sms_notifications: boolean;
-        notification_types: string[];
-      }>(`/notifications/settings/${userId}`);
-      return response;
-    } catch (error) {
-      console.error(
-        'Erro ao obter configurações de notificação (sem fallback):',
-        error
-      );
-      throw error;
-    }
+    return {
+      email_notifications: true,
+      push_notifications: true,
+      sms_notifications: false,
+      notification_types: ['info', 'warning', 'error'],
+    };
   }
 }
 

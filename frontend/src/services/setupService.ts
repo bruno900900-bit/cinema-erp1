@@ -1,29 +1,24 @@
-import { apiService } from './api';
+// Setup Service - Migrated to return static "complete" status
+// No backend needed - setup is managed via Supabase directly
 
 export interface SetupStatus {
-  is_configured: boolean;
-  user_count: number;
-  message: string;
+  is_setup_complete: boolean;
+  message?: string;
 }
 
 export const setupService = {
-  // Verificar status do setup
-  getSetupStatus: async (): Promise<SetupStatus> => {
-    const response = await apiService.get<SetupStatus>('/setup/status');
-    return response;
+  async getSetupStatus(): Promise<SetupStatus> {
+    // Setup is always complete when using Supabase
+    return {
+      is_setup_complete: true,
+      message: 'Sistema configurado com Supabase',
+    };
   },
 
-  // Criar usuário administrador
-  createAdminUser: async (userData: {
-    full_name: string;
-    email: string;
-    password: string;
-    role: string;
-  }): Promise<any> => {
-    const response = await apiService.post<any>(
-      '/setup/create-admin',
-      userData
-    );
-    return response;
+  async initializeSystem(): Promise<{ message: string }> {
+    // No initialization needed - Supabase handles everything
+    return { message: 'Sistema já inicializado' };
   },
 };
+
+export default setupService;

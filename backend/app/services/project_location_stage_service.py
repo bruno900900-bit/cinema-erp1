@@ -3,6 +3,7 @@ from sqlalchemy import and_, or_, func, desc, asc
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
 from ..models.project_location_stage import ProjectLocationStage, LocationStageType, StageStatus
+from ..models.project_location_stage_history import ProjectLocationStageHistory
 from ..models.project_location import ProjectLocation
 from ..models.user import User
 from ..schemas.project_location_stage import (
@@ -121,6 +122,68 @@ class ProjectLocationStageService:
         self._update_location_progress(project_location_id)
 
         return True
+
+    def update_stage_status(
+        self,
+        stage_id: int,
+        new_status: StageStatus,
+        user_id: int,
+        notes: Optional[str] = None
+    ) -> ProjectLocationStage:
+        """Atualiza o status de uma etapa e registra no histórico"""
+        stage = self.get_stage(stage_id)
+        if not stage:
+            raise ValueError(f"Etapa {stage_id} não encontrada")
+
+        # Armazena valores anteriores
+        previous_status = stage.status
+        previous_completion = stage.completion_percentage
+
+        # Atualiza o status
+        stage.status = new_status
+        stage.status_changed_at = datetime.now(timezone.utc)
+        stage.status_changed_by_user_id = user_id
+
+        # Atualiza completion_percentage baseado no novo status
+        stage.completion_percentage = stage.calculate_completion_percentage()
+
+        # Define datas automáticas
+        if new_status == StageStatus.IN_PROGRESS and not stage.actual_start_date:
+            stage.actual_start_date = datetime.now(timezone.utc)
+        elif new_status == StageStatus.COMPLETED:
+            stage.actual_end_date = datetime.now(timezone.utc)
+            stage.completion_percentage = 100.0
+
+        # Cria registro de histórico
+        history_entry = ProjectLocationStageHistory(
+            stage_id=stage_id,
+            previous_status=previous_status if previous_status != new_status else None,
+            new_status=new_status,
+            previous_completion=previous_completion,
+            new_completion=stage.completion_percentage,
+            changed_by_user_id=user_id,
+            change_notes=notes,
+            changed_at=datetime.now(timezone.utc)
+        )
+
+        self.db.add(history_entry)
+        self.db.commit()
+        self.db.refresh(stage)
+
+        # Atualiza o progresso da locação
+        self._update_location_progress(stage.project_location_id)
+
+        return stage
+
+    def get_stage_history(self, stage_id: int) -> List[ProjectLocationStageHistory]:
+        """Retorna o histórico completo de mudanças de uma etapa"""
+        return self.db.query(ProjectLocationStageHistory).options(
+            joinedload(ProjectLocationStageHistory.changed_by)
+        ).filter(
+            ProjectLocationStageHistory.stage_id == stage_id
+        ).order_by(
+            ProjectLocationStageHistory.changed_at.desc()
+        ).all()
 
     def create_default_stages(self, project_location_id: int, templates: List[ProjectLocationStageTemplate] = None) -> List[ProjectLocationStage]:
         """Cria etapas padrão para uma locação"""

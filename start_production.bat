@@ -1,0 +1,6 @@
+@echo off
+echo Iniciando Frontend Cinema ERP (Production Preview)...
+cd frontend
+echo Rodando build de preview...
+npm run preview
+pause

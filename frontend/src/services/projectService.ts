@@ -1,4 +1,4 @@
-import { apiService, normalizeListResponse } from './api';
+import { supabase } from '../config/supabaseClient';
 import {
   Project,
   TaskType,
@@ -7,6 +7,8 @@ import {
   LocationTag,
 } from '@/types/user';
 import { PayloadValidator, validatePayload } from '../utils/validation';
+import { tagService } from './tagService';
+import { syncProjectToAgenda } from './projectAgendaSyncService';
 
 // Helper functions
 function extractClientName(source: any): string | undefined {
@@ -28,6 +30,22 @@ function toDateOnly(date: any): string | undefined {
   return d.toISOString().split('T')[0];
 }
 
+async function resolveAuthIdToUserId(
+  authId: string
+): Promise<number | undefined> {
+  if (!authId || typeof authId !== 'string') return undefined;
+  // Check if it looks like a UUID (simple check)
+  if (authId.length < 20) return undefined;
+
+  const { data } = await supabase
+    .from('users')
+    .select('id')
+    .eq('auth_id', authId)
+    .single();
+
+  return data?.id;
+}
+
 function buildProjectPayload(
   project: Partial<Project>,
   { forUpdate = false }: { forUpdate?: boolean } = {}
@@ -36,7 +54,10 @@ function buildProjectPayload(
   const payload: Record<string, any> = {};
 
   const title = source.title || source.name;
-  if (title) payload.title = String(title);
+  if (title) {
+    payload.title = String(title);
+    payload.name = String(title); // Supabase DB uses 'name' column
+  }
 
   const clientName = extractClientName(source);
   if (clientName !== undefined) payload.client_name = clientName;
@@ -48,7 +69,30 @@ function buildProjectPayload(
 
   if (source.description !== undefined)
     payload.description = source.description;
-  if (source.status !== undefined) payload.status = source.status;
+
+  // Normalize status to valid enum values
+  // Valid: 'active', 'archived', 'completed', 'on_hold', 'cancelled'
+  if (source.status !== undefined) {
+    const validStatuses = [
+      'active',
+      'archived',
+      'completed',
+      'on_hold',
+      'cancelled',
+    ];
+    const normalizedStatus = String(source.status)
+      .toLowerCase()
+      .replace(/ /g, '_');
+    if (validStatuses.includes(normalizedStatus)) {
+      payload.status = normalizedStatus;
+    } else {
+      // Default to 'active' if invalid status
+      payload.status = 'active';
+    }
+  } else {
+    // Set default status for new projects
+    payload.status = 'active';
+  }
 
   if (source.budget !== undefined)
     payload.budget =
@@ -76,7 +120,8 @@ function buildProjectPayload(
     source.responsible_user_id ??
     source.responsibleuserId;
   if (responsible !== undefined && responsible !== null && responsible !== '') {
-    payload.responsibleUserId = String(responsible);
+    // Correcting key for Supabase
+    payload.responsible_user_id = String(responsible);
   }
 
   const coverPhoto = source.cover_photo_url ?? source.coverPhotoUrl;
@@ -116,17 +161,29 @@ async function fetchProject(id: string): Promise<Project> {
   try {
     console.log(`📋 ProjectService.getProject - Buscando projeto ID: ${id}`);
 
-    const response = await apiService.get<Project>(`/projects/${id}`);
+    // Supabase fetch
+    const { data, error } = await supabase
+      .from('projects')
+      .select(
+        `
+        *,
+        locations (*),
+        tasks:project_tasks (*),
+        tags:project_tags (*),
+        project_locations (*)
+      `
+      )
+      .eq('id', id)
+      .single();
 
-    if (!response) {
-      throw new Error('Resposta vazia do servidor');
-    }
+    if (error) throw error;
+    if (!data) throw new Error('Projeto não encontrado');
 
-    console.log('✅ ProjectService.getProject - Sucesso:', response);
-    return response;
-  } catch (error) {
-    console.error('❌ ProjectService.getProject - Erro:', error);
-
+    const project = data as Project;
+    console.log('✅ ProjectService.getProject - Sucesso:', project);
+    return project;
+  } catch (error: any) {
+    console.error('❌ ProjectService.getProject - Erro (Supabase):', error);
     throw new Error(`Projeto com ID ${id} não encontrado`);
   }
 }
@@ -135,23 +192,20 @@ export const projectService = {
   // Buscar todos os projetos
   getProjects: async (): Promise<Project[]> => {
     try {
-      console.log('📋 ProjectService.getProjects - Iniciando busca');
+      console.log('📋 ProjectService.getProjects - Iniciando busca (Supabase)');
 
-      const response = await apiService.get<any>('/projects');
-      const result = normalizeListResponse<Project>(response, [
-        'projects',
-        'items',
-        'results',
-      ]);
+      const { data, error } = await supabase.from('projects').select('*');
+
+      if (error) throw error;
 
       console.log(
         '✅ ProjectService.getProjects - Sucesso:',
-        result.length,
+        data?.length,
         'projetos'
       );
-      return result as Project[];
-    } catch (error) {
-      console.error('❌ ProjectService.getProjects - Erro:', error);
+      return (data as Project[]) || [];
+    } catch (error: any) {
+      console.error('❌ ProjectService.getProjects - Erro (Supabase):', error);
       throw new Error('Não foi possível carregar os projetos');
     }
   },
@@ -164,43 +218,112 @@ export const projectService = {
 
   // Criar novo projeto
   createProject: async (project: Partial<Project>): Promise<Project> => {
+    const startTime = Date.now();
+
     try {
       console.log(
-        '📋 ProjectService.createProject - Validando dados do projeto'
+        '📋 ProjectService.createProject - Validando dados (Supabase)'
       );
 
-      // Mapear campos para compatibilidade (aceitar camelCase e enviar snake_case)
       const normalized = buildProjectPayload(project, { forUpdate: false });
 
-      // Validar payload antes de enviar
+      // Validação local pode ser omitida se confiarmos no Supabase ou manter se for útil
       const validatedData = validatePayload(
         normalized,
         PayloadValidator.validateProjectCreate,
         'criação de projeto'
       );
 
-      console.log(
-        '✅ ProjectService.createProject - Dados validados, enviando para API'
-      );
-      const response = await apiService.post<Project>(
-        '/projects',
-        validatedData
-      );
+      // Adicionar campos obrigatórios para Supabase se faltar
+      if (!validatedData.created_by) {
+        // Get current user ID
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
 
-      console.log(
-        '✅ ProjectService.createProject - Projeto criado com sucesso:',
-        response
-      );
-      return response;
-    } catch (error: any) {
-      console.error('❌ ProjectService.createProject - Erro:', error);
+        if (!user) {
+          throw new Error('Usuário não autenticado. Faça login novamente.');
+        }
 
-      // Se for erro de validação, relançar com mensagem clara
-      if (error.message.includes('Dados inválidos')) {
+        // Precisamos do ID numérico da tabela users, vinculado ao Auth ID
+        const { data: uData } = await supabase
+          .from('users')
+          .select('id')
+          .eq('auth_id', user.id)
+          .single();
+
+        if (uData) {
+          validatedData.created_by = uData.id;
+        } else {
+          console.error(
+            'Perfil de usuário não encontrado para o Auth ID:',
+            user.id
+          );
+          throw new Error(
+            'Perfil de usuário não encontrado. Entre em contato com o suporte.'
+          );
+        }
+      }
+
+      // Resolver responsible_user_id se for UUID
+      if (
+        validatedData.responsible_user_id &&
+        typeof validatedData.responsible_user_id === 'string' &&
+        isNaN(Number(validatedData.responsible_user_id))
+      ) {
+        const resolvedId = await resolveAuthIdToUserId(
+          validatedData.responsible_user_id
+        );
+        if (resolvedId) {
+          validatedData.responsible_user_id = resolvedId;
+        }
+      }
+
+      console.log('✅ ProjectService.createProject - Enviando para Supabase');
+
+      const { data, error } = await supabase
+        .from('projects')
+        .insert([validatedData])
+        .select()
+        .single();
+
+      if (error) {
+        // Detectar e reportar erro RLS específico
+        if (error.code === '42501' || error.message?.includes('policy')) {
+          console.error(
+            '🚫 ERRO RLS detectado ao criar projeto:',
+            '\n',
+            'Tabela: projects',
+            '\n',
+            'Operação: INSERT',
+            '\n',
+            'Verifique as políticas RLS no Supabase Dashboard.',
+            '\n',
+            'Erro detalhado:',
+            error
+          );
+        }
         throw error;
       }
 
-      throw new Error('Não foi possível criar o projeto');
+      console.log('✅ ProjectService.createProject - Sucesso:', data);
+      console.log(`⏱️ Tempo de operação: ${Date.now() - startTime}ms`);
+
+      // ✨ Sincronizar datas com agenda (não bloqueia mesmo se falhar)
+      syncProjectToAgenda(data as Project).catch(err =>
+        console.warn('Erro ao sincronizar projeto com agenda:', err)
+      );
+
+      return data as Project;
+    } catch (error: any) {
+      console.error(
+        '❌ ProjectService.createProject - Erro (Supabase):',
+        error
+      );
+      console.error(`⏱️ Falhou após: ${Date.now() - startTime}ms`);
+
+      if (error.message?.includes('Dados inválidos')) throw error;
+      throw new Error('Não foi possível criar o projeto: ' + error.message);
     }
   },
 
@@ -211,36 +334,109 @@ export const projectService = {
   ): Promise<Project> => {
     try {
       const payload = buildProjectPayload(project, { forUpdate: true });
-      const response = await apiService.put<Project>(
-        `/projects/${id}`,
-        payload
-      );
-      return response;
-    } catch (error) {
-      console.error('Erro ao atualizar projeto:', error);
+
+      // Resolver responsible_user_id se for UUID
+      if (
+        payload.responsible_user_id &&
+        typeof payload.responsible_user_id === 'string' &&
+        isNaN(Number(payload.responsible_user_id))
+      ) {
+        const resolvedId = await resolveAuthIdToUserId(
+          payload.responsible_user_id
+        );
+        if (resolvedId) {
+          payload.responsible_user_id = resolvedId;
+        }
+      }
+
+      const { data, error } = await supabase
+        .from('projects')
+        .update(payload)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data as Project;
+    } catch (error: any) {
+      console.error('Erro ao atualizar projeto (Supabase):', error);
       throw new Error('Não foi possível atualizar o projeto');
     }
   },
 
   // Excluir projeto
+  // Excluir projeto com cascata manual
   deleteProject: async (id: string): Promise<void> => {
     try {
-      await apiService.delete(`/projects/${id}`);
-    } catch (error) {
-      console.error('Erro ao excluir projeto:', error);
-      throw new Error('Não foi possível excluir o projeto');
+      console.log(
+        `🗑️ ProjectService.deleteProject - Excluindo dependências do projeto ${id}`
+      );
+
+      // 1. Excluir Tasks
+      const { error: tasksError } = await supabase
+        .from('project_tasks')
+        .delete()
+        .eq('project_id', id);
+      if (tasksError)
+        console.warn('Erro ao excluir tarefas do projeto:', tasksError);
+
+      // 2. Excluir Project Locations
+      const { error: locsError } = await supabase
+        .from('project_locations')
+        .delete()
+        .eq('project_id', id);
+      if (locsError)
+        console.warn('Erro ao excluir locações do projeto:', locsError);
+
+      // 3. Excluir Project Tags
+      const { error: tagsError } = await supabase
+        .from('project_tags')
+        .delete()
+        .eq('project_id', id);
+      if (tagsError)
+        console.warn('Erro ao excluir tags do projeto:', tagsError);
+
+      // 4. Excluir Visits (se houver link direto com projeto)
+      const { error: visitsError } = await supabase
+        .from('visits')
+        .delete()
+        .eq('project_id', id);
+      if (visitsError)
+        console.warn('Erro ao excluir visitas do projeto:', visitsError);
+
+      // 5. Finalmente excluir o projeto
+      console.log('🗑️ ProjectService.deleteProject - Excluindo projeto');
+      const { error } = await supabase.from('projects').delete().eq('id', id);
+
+      if (error) throw error;
+    } catch (error: any) {
+      console.error('Erro ao excluir projeto (Supabase):', error);
+      throw new Error(
+        'Não foi possível excluir o projeto. Verifique se existem registros vinculados que impedem a exclusão.'
+      );
     }
   },
 
   // Buscar projetos por usuário responsável
   getProjectsByUser: async (userId: string): Promise<Project[]> => {
     try {
-      const response = await apiService.get<Project[]>(
-        `/projects/user/${userId}`
-      );
-      return response;
-    } catch (error) {
-      console.error('Erro ao buscar projetos por usuário:', error);
+      let query = supabase.from('projects').select('*');
+
+      // Tentar converter para numérico se for string numérica
+      if (!isNaN(Number(userId))) {
+        query = query.or(
+          `responsible_user_id.eq.${userId},manager_id.eq.${userId},coordinator_id.eq.${userId}`
+        );
+      } else {
+        // Fallback para string (se houver coluna de UUID ou legacy)
+        query = query.eq('responsible_user_id', userId);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data as Project[]) || [];
+    } catch (error: any) {
+      console.error('Erro ao buscar projetos por usuário (Supabase):', error);
       return [];
     }
   },
@@ -248,12 +444,14 @@ export const projectService = {
   // Buscar projetos por status
   getProjectsByStatus: async (status: string): Promise<Project[]> => {
     try {
-      const response = await apiService.get<Project[]>('/projects/status', {
-        params: { status },
-      });
-      return response;
-    } catch (error) {
-      console.error('Erro ao buscar projetos por status:', error);
+      const { data, error } = await supabase
+        .from('projects')
+        .select('*')
+        .eq('status', status);
+      if (error) throw error;
+      return (data as Project[]) || [];
+    } catch (error: any) {
+      console.error('Erro ao buscar projetos por status (Supabase):', error);
       return [];
     }
   },
@@ -261,15 +459,17 @@ export const projectService = {
   // Atualizar status do projeto
   updateProjectStatus: async (id: string, status: string): Promise<Project> => {
     try {
-      const response = await apiService.patch<Project>(
-        `/projects/${id}/status`,
-        {
-          status,
-        }
-      );
-      return response;
-    } catch (error) {
-      console.error('Erro ao atualizar status do projeto:', error);
+      const { data, error } = await supabase
+        .from('projects')
+        .update({ status })
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data as Project;
+    } catch (error: any) {
+      console.error('Erro ao atualizar status do projeto (Supabase):', error);
       throw new Error('Não foi possível atualizar o status do projeto');
     }
   },
@@ -277,108 +477,134 @@ export const projectService = {
   // Buscar estatísticas de projetos
   getProjectStats: async (): Promise<any> => {
     try {
-      const response = await apiService.get('/projects/stats');
-      return response;
-    } catch (error) {
-      console.error('Erro ao buscar estatísticas de projetos:', error);
+      const { count, error } = await supabase
+        .from('projects')
+        .select('*', { count: 'exact', head: true });
+      if (error) throw error;
+      // TODO: Implementar agregação real se necessário
       return {
-        total: 0,
+        total: count || 0,
         active: 0,
         completed: 0,
         cancelled: 0,
       };
+    } catch (error: any) {
+      console.error('Erro ao buscar estatísticas (Supabase):', error);
+      return { total: 0, active: 0, completed: 0, cancelled: 0 };
     }
   },
 
   // Exportar projetos
   exportProjects: async (filters?: any): Promise<Blob> => {
-    try {
-      const response = await apiService.get<Blob>('/projects/export', {
-        params: filters,
-        responseType: 'blob',
-      });
-      return response;
-    } catch (error) {
-      console.error('Erro ao exportar projetos:', error);
-      throw new Error('Não foi possível exportar os projetos');
-    }
+    console.warn('Export functionality not migrated to Supabase yet.');
+    throw new Error(
+      'Funcionalidade de exportação temporariamente indisponível durante migração.'
+    );
   },
 
   // Adicionar tarefa ao projeto
-  addTaskToProject: async (
+  addTask: async (
     projectId: string,
-    task: any
+    task: Partial<ProjectTask>
   ): Promise<ProjectTask> => {
     try {
-      const response = await apiService.post<ProjectTask>(
-        `/projects/${projectId}/tasks`,
-        task
-      );
-      return response;
-    } catch (error) {
-      console.error('Erro ao adicionar tarefa ao projeto:', error);
-      throw new Error('Não foi possível adicionar a tarefa ao projeto');
+      const payload = {
+        title: task.title,
+        description: task.description,
+        status: task.status || TaskStatus.PENDING,
+        priority: task.priority || 'medium',
+        due_date: task.due_date,
+        project_id: projectId,
+        assigned_to_id: task.assigned_to_id,
+        parent_task_id: task.parent_task_id,
+      };
+
+      const { data, error } = await supabase
+        .from('project_tasks')
+        .insert([payload])
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data as ProjectTask;
+    } catch (error: any) {
+      console.error('Erro ao adicionar tarefa (Supabase):', error);
+      throw new Error('Não foi possível adicionar a tarefa');
     }
   },
 
-  // Atualizar tarefa do projeto
-  updateProjectTask: async (
-    projectId: string,
+  // Atualizar status da tarefa
+  updateTaskStatus: async (
     taskId: string,
-    task: any
+    status: TaskStatus
   ): Promise<ProjectTask> => {
     try {
-      const response = await apiService.put<ProjectTask>(
-        `/projects/${projectId}/tasks/${taskId}`,
-        task
+      const { data, error } = await supabase
+        .from('project_tasks')
+        .update({ status })
+        .eq('id', taskId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data as ProjectTask;
+    } catch (error: any) {
+      console.error('Erro ao atualizar status da tarefa (Supabase):', error);
+      throw new Error('Não foi possível atualizar a tarefa');
+    }
+  },
+
+  // Excluir tarefa
+  deleteTask: async (taskId: string): Promise<void> => {
+    try {
+      const { error } = await supabase
+        .from('project_tasks')
+        .delete()
+        .eq('id', taskId);
+      if (error) throw error;
+    } catch (error: any) {
+      console.error('Erro ao excluir tarefa (Supabase):', error);
+      throw new Error('Não foi possível excluir a tarefa');
+    }
+  },
+
+  // Buscar tags disponíveis
+  getTags: async (): Promise<string[]> => {
+    // Delegate to tagService but return names for compatibility if UI expects strings
+    // Ideally UI should update to use Tag objects
+    const tags = await tagService.getTags();
+    return tags.map(t => t.name);
+  },
+
+  // Adicionar tag ao projeto
+  addTag: async (projectId: string, tagName: string): Promise<void> => {
+    try {
+      // 1. Ensure tag exists and get ID
+      const tag = await tagService.ensureTag(tagName);
+      // 2. Link
+      await tagService.addTagToResource('project', projectId, tag.id);
+    } catch (error: any) {
+      console.error('Erro ao adicionar tag (Supabase):', error);
+      // Ignore unique violation usually
+    }
+  },
+
+  // Remover tag do projeto
+  removeTag: async (projectId: string, tagName: string): Promise<void> => {
+    try {
+      // Need ID to remove
+      // 1. Find tag by name
+      const tags = await tagService.searchTagsByName(tagName);
+      const tag = tags.find(
+        t => t.name.toLowerCase() === tagName.toLowerCase()
       );
-      return response;
-    } catch (error) {
-      console.error('Erro ao atualizar tarefa do projeto:', error);
-      throw new Error('Não foi possível atualizar a tarefa do projeto');
-    }
-  },
 
-  // Remover tarefa do projeto
-  removeTaskFromProject: async (
-    projectId: string,
-    taskId: string
-  ): Promise<void> => {
-    try {
-      await apiService.delete(`/projects/${projectId}/tasks/${taskId}`);
-    } catch (error) {
-      console.error('Erro ao remover tarefa do projeto:', error);
-      throw new Error('Não foi possível remover a tarefa do projeto');
-    }
-  },
-
-  // Adicionar Tag ao projeto
-  addTagToProject: async (
-    projectId: string,
-    tag: { name: string; kind: string; color?: string }
-  ): Promise<LocationTag> => {
-    try {
-      const response = await apiService.post<LocationTag>(
-        `/projects/${projectId}/tags`,
-        tag
-      );
-      return response;
-    } catch (error) {
-      console.error('Erro ao adicionar tag ao projeto:', error);
-      throw new Error('Não foi possível adicionar a tag ao projeto');
-    }
-  },
-
-  // Remover Tag do projeto
-  removeTagFromProject: async (
-    projectId: string,
-    tagId: string
-  ): Promise<void> => {
-    try {
-      await apiService.delete(`/projects/${projectId}/tags/${tagId}`);
-    } catch (error) {
-      console.error('Erro ao remover tag do projeto:', error);
-      throw new Error('Não foi possível remover a tag do projeto');
+      if (tag) {
+        await tagService.removeTagFromResource('project', projectId, tag.id);
+      }
+    } catch (error: any) {
+      console.error('Erro ao remover tag (Supabase):', error);
+      throw new Error('Não foi possível remover a tag');
     }
   },
 
@@ -408,13 +634,18 @@ export const projectService = {
         return [];
       }
 
-      const response = await apiService.get<Project[]>('/projects/date-range', {
-        params: {
-          start_date: start.toISOString(),
-          end_date: end.toISOString(),
-        },
-      });
-      return response;
+      let query = supabase.from('projects').select('*');
+
+      if (!isNaN(start.getTime())) {
+        query = query.gte('start_date', start.toISOString());
+      }
+      if (!isNaN(end.getTime())) {
+        query = query.lte('end_date', end.toISOString());
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data as Project[]) || [];
     } catch (error) {
       console.error('Erro ao buscar projetos por período:', error);
       return [];
@@ -427,13 +658,13 @@ export const projectService = {
     maxBudget: number
   ): Promise<Project[]> => {
     try {
-      const response = await apiService.get<Project[]>('/projects/budget', {
-        params: {
-          min_budget: minBudget,
-          max_budget: maxBudget,
-        },
-      });
-      return response;
+      let query = supabase.from('projects').select('*');
+      if (minBudget !== undefined) query = query.gte('budget_total', minBudget);
+      if (maxBudget !== undefined) query = query.lte('budget_total', maxBudget);
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data as Project[]) || [];
     } catch (error) {
       console.error('Erro ao buscar projetos por orçamento:', error);
       return [];

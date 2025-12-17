@@ -127,6 +127,11 @@ const PERMISSION_CATEGORIES = {
     description: 'Controle sobre projetos e operações',
     permissions: [
       {
+        key: 'canViewProjects',
+        label: 'Visualizar Projetos',
+        description: 'Ver projetos (somente leitura)',
+      },
+      {
         key: 'canCreateProjects',
         label: 'Criar Projetos',
         description: 'Criar novos projetos',
@@ -140,6 +145,38 @@ const PERMISSION_CATEGORIES = {
         key: 'canDeleteProjects',
         label: 'Excluir Projetos',
         description: 'Remover projetos',
+      },
+      {
+        key: 'canViewContracts',
+        label: 'Visualizar Contratos',
+        description: 'Ver contratos (somente leitura)',
+      },
+      {
+        key: 'canManageContracts',
+        label: 'Gerenciar Contratos',
+        description: 'Criar e editar contratos',
+      },
+    ],
+  },
+  dataManagement: {
+    title: 'Gerenciamento de Dados',
+    icon: <LocationIcon />,
+    description: 'Controle sobre locações, tags e arquivos',
+    permissions: [
+      {
+        key: 'canManageTags',
+        label: 'Gerenciar Tags',
+        description: 'Criar, editar e excluir tags',
+      },
+      {
+        key: 'canViewFiles',
+        label: 'Visualizar Arquivos',
+        description: 'Ver e baixar arquivos',
+      },
+      {
+        key: 'canManageFiles',
+        label: 'Gerenciar Arquivos',
+        description: 'Fazer upload e gerenciar arquivos',
       },
     ],
   },
@@ -203,6 +240,12 @@ export default function UserPermissionsModal({
     canActivateUsers: false,
     canDeactivateUsers: false,
     canDeleteUsers: false,
+    canViewProjects: false,
+    canManageContracts: false,
+    canViewContracts: false,
+    canManageTags: false,
+    canManageFiles: false,
+    canViewFiles: false,
   });
   const [hasChanges, setHasChanges] = useState(false);
 
@@ -269,6 +312,12 @@ export default function UserPermissionsModal({
         canActivateUsers: true,
         canDeactivateUsers: true,
         canDeleteUsers: true,
+        canViewProjects: true,
+        canManageContracts: true,
+        canViewContracts: true,
+        canManageTags: true,
+        canManageFiles: true,
+        canViewFiles: true,
       },
       [UserRole.MANAGER]: {
         canViewDashboard: true,
@@ -287,6 +336,12 @@ export default function UserPermissionsModal({
         canActivateUsers: false,
         canDeactivateUsers: false,
         canDeleteUsers: false,
+        canViewProjects: true,
+        canManageContracts: true,
+        canViewContracts: true,
+        canManageTags: true,
+        canManageFiles: true,
+        canViewFiles: true,
       },
       [UserRole.COORDINATOR]: {
         canViewDashboard: true,
@@ -305,6 +360,12 @@ export default function UserPermissionsModal({
         canActivateUsers: false,
         canDeactivateUsers: false,
         canDeleteUsers: false,
+        canViewProjects: true,
+        canManageContracts: false,
+        canViewContracts: true,
+        canManageTags: true,
+        canManageFiles: false,
+        canViewFiles: true,
       },
       [UserRole.OPERATOR]: {
         canViewDashboard: true,
@@ -323,6 +384,12 @@ export default function UserPermissionsModal({
         canActivateUsers: false,
         canDeactivateUsers: false,
         canDeleteUsers: false,
+        canViewProjects: true,
+        canManageContracts: false,
+        canViewContracts: false,
+        canManageTags: false,
+        canManageFiles: false,
+        canViewFiles: true,
       },
       [UserRole.VIEWER]: {
         canViewDashboard: true,
@@ -341,6 +408,12 @@ export default function UserPermissionsModal({
         canActivateUsers: false,
         canDeactivateUsers: false,
         canDeleteUsers: false,
+        canViewProjects: false,
+        canManageContracts: false,
+        canViewContracts: false,
+        canManageTags: false,
+        canManageFiles: false,
+        canViewFiles: false,
       },
       [UserRole.CLIENT]: {
         canViewDashboard: false,
@@ -359,6 +432,12 @@ export default function UserPermissionsModal({
         canActivateUsers: false,
         canDeactivateUsers: false,
         canDeleteUsers: false,
+        canViewProjects: false,
+        canManageContracts: false,
+        canViewContracts: false,
+        canManageTags: false,
+        canManageFiles: false,
+        canViewFiles: false,
       },
       [UserRole.CONTRIBUTOR]: {
         canViewDashboard: false,
@@ -377,6 +456,12 @@ export default function UserPermissionsModal({
         canActivateUsers: false,
         canDeactivateUsers: false,
         canDeleteUsers: false,
+        canViewProjects: false,
+        canManageContracts: false,
+        canViewContracts: false,
+        canManageTags: false,
+        canManageFiles: false,
+        canViewFiles: false,
       },
     };
 

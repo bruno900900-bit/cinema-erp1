@@ -1,4 +1,5 @@
-import { apiService } from './api';
+// Export Service - Migrated to client-side mock
+// Export functionality would require server-side processing or client-side implementation
 
 export interface LocationPhotoSelection {
   location_id: number;
@@ -7,49 +8,42 @@ export interface LocationPhotoSelection {
 
 export interface PresentationExportData {
   location_ids: number[];
-  order: number[];
-  include_photos: boolean;
-  include_summary: boolean;
-  template_name: string;
+  order?: number[];
+  include_photos?: boolean;
+  include_summary?: boolean;
+  template_name?: string;
   title?: string;
   subtitle?: string;
   selected_photos?: LocationPhotoSelection[];
 }
 
 export const exportService = {
-  /**
-   * Exporta locações para apresentação PowerPoint
-   */
-  exportPresentation: async (data: PresentationExportData): Promise<Blob> => {
-    const response = await apiService.post<Blob>(
-      '/export/presentation/download',
-      data,
-      {
-        responseType: 'blob',
-      }
+  async exportLocations(params: any): Promise<Blob> {
+    console.warn(
+      'Export functionality not available during Supabase migration'
     );
-    return response;
+    throw new Error(
+      'Funcionalidade de exportação temporariamente indisponível'
+    );
   },
 
-  /**
-   * Gera apresentação e retorna informações do arquivo
-   */
-  generatePresentation: async (data: PresentationExportData) => {
-    const response = await apiService.post('/export/presentation', data);
-    return response;
+  async generatePresentation(data: any): Promise<{ file_id: string }> {
+    console.warn('Presentation generation not available during migration');
+    throw new Error('Geração de apresentação temporariamente indisponível');
   },
 
-  /**
-   * Faz download de uma apresentação gerada anteriormente
-   */
-  downloadPresentation: async (
-    fileId: string,
-    data: PresentationExportData
-  ): Promise<Blob> => {
-    const response = await apiService.get<Blob>(`/export/download/${fileId}`, {
-      data,
-      responseType: 'blob',
-    });
-    return response;
+  async exportPresentation(data: PresentationExportData): Promise<Blob> {
+    console.warn('Presentation export not available during migration');
+    console.log('Export data:', data);
+    throw new Error(
+      'Exportação de apresentação temporariamente indisponível. Esta funcionalidade requer processamento no servidor.'
+    );
+  },
+
+  async downloadFile(fileId: string): Promise<Blob> {
+    console.warn('File download not available during migration');
+    throw new Error('Download de arquivo temporariamente indisponível');
   },
 };
+
+export default exportService;

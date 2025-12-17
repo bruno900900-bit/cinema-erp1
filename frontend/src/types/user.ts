@@ -221,6 +221,10 @@ export interface ProjectTask {
   completed_at?: Date;
   completed?: boolean; // Computed: true se completed_at existe
   notes?: string;
+  priority?: string;
+  parent_task_id?: string;
+  project_id?: string;
+  assigned_to_id?: string;
 }
 
 export enum ProjectStatus {

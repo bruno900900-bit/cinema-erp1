@@ -20,6 +20,12 @@ const ROLE_PERMISSIONS = {
     canActivateUsers: true,
     canDeactivateUsers: true,
     canDeleteUsers: true,
+    canViewProjects: true,
+    canManageContracts: true,
+    canViewContracts: true,
+    canManageTags: true,
+    canManageFiles: true,
+    canViewFiles: true,
   },
   [UserRole.MANAGER]: {
     canViewDashboard: true,
@@ -38,6 +44,12 @@ const ROLE_PERMISSIONS = {
     canActivateUsers: false,
     canDeactivateUsers: false,
     canDeleteUsers: false,
+    canViewProjects: true,
+    canManageContracts: true,
+    canViewContracts: true,
+    canManageTags: true,
+    canManageFiles: true,
+    canViewFiles: true,
   },
   [UserRole.COORDINATOR]: {
     canViewDashboard: true,
@@ -56,6 +68,12 @@ const ROLE_PERMISSIONS = {
     canActivateUsers: false,
     canDeactivateUsers: false,
     canDeleteUsers: false,
+    canViewProjects: true,
+    canManageContracts: false,
+    canViewContracts: true,
+    canManageTags: true,
+    canManageFiles: false,
+    canViewFiles: true,
   },
   [UserRole.OPERATOR]: {
     canViewDashboard: true,
@@ -74,6 +92,12 @@ const ROLE_PERMISSIONS = {
     canActivateUsers: false,
     canDeactivateUsers: false,
     canDeleteUsers: false,
+    canViewProjects: true,
+    canManageContracts: false,
+    canViewContracts: false,
+    canManageTags: false,
+    canManageFiles: false,
+    canViewFiles: true,
   },
   [UserRole.VIEWER]: {
     canViewDashboard: true,
@@ -92,6 +116,12 @@ const ROLE_PERMISSIONS = {
     canActivateUsers: false,
     canDeactivateUsers: false,
     canDeleteUsers: false,
+    canViewProjects: false,
+    canManageContracts: false,
+    canViewContracts: false,
+    canManageTags: false,
+    canManageFiles: false,
+    canViewFiles: false,
   },
   [UserRole.CLIENT]: {
     canViewDashboard: false,
@@ -110,6 +140,12 @@ const ROLE_PERMISSIONS = {
     canActivateUsers: false,
     canDeactivateUsers: false,
     canDeleteUsers: false,
+    canViewProjects: false,
+    canManageContracts: false,
+    canViewContracts: false,
+    canManageTags: false,
+    canManageFiles: false,
+    canViewFiles: false,
   },
   [UserRole.CONTRIBUTOR]: {
     canViewDashboard: false,
@@ -128,6 +164,12 @@ const ROLE_PERMISSIONS = {
     canActivateUsers: false,
     canDeactivateUsers: false,
     canDeleteUsers: false,
+    canViewProjects: false,
+    canManageContracts: false,
+    canViewContracts: false,
+    canManageTags: false,
+    canManageFiles: false,
+    canViewFiles: false,
   },
 };
 
@@ -148,6 +190,13 @@ export interface Permissions {
   canActivateUsers: boolean;
   canDeactivateUsers: boolean;
   canDeleteUsers: boolean;
+  // New granular permissions
+  canViewProjects: boolean;
+  canManageContracts: boolean;
+  canViewContracts: boolean;
+  canManageTags: boolean;
+  canManageFiles: boolean;
+  canViewFiles: boolean;
 }
 
 export function usePermissions(): Permissions {

@@ -70,6 +70,7 @@ import {
 import LoadingSpinner from '../components/Common/LoadingSpinner';
 import EventCreationModal from '../components/Agenda/EventCreationModal';
 import EventDetailModal from '../components/Agenda/EventDetailModal';
+import DateDetailDialog from '../components/Agenda/DateDetailDialog';
 import { projectService } from '../services/projectService';
 import { userService } from '../services/userService';
 import { tagService } from '../services/tagService';
@@ -162,6 +163,10 @@ const AgendaPage: React.FC = () => {
   }>({ open: false, message: '', severity: 'info' });
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [eventToDelete, setEventToDelete] = useState<AgendaEvent | null>(null);
+
+  // Estados para expansão de data
+  const [expandedDate, setExpandedDate] = useState<Date | null>(null);
+  const [isDateDetailOpen, setIsDateDetailOpen] = useState(false);
 
   // ==================== QUERIES ====================
   const { data: agendaEvents = [], isLoading: eventsLoading } = useQuery({
@@ -319,6 +324,11 @@ const AgendaPage: React.FC = () => {
     setIsEventModalOpen(true);
   };
 
+  const handleDateClick = (date: Date) => {
+    setExpandedDate(date);
+    setIsDateDetailOpen(true);
+  };
+
   const handleEventClick = (event: AgendaEvent) => {
     setSelectedEvent(event);
     setIsDetailModalOpen(true);
@@ -331,18 +341,18 @@ const AgendaPage: React.FC = () => {
       const apiEventData: AgendaEventCreate = {
         title: eventData.title || 'Novo Evento',
         description: eventData.description,
-        event_type: EventType.CUSTOM,
+        event_type: EventType.OTHER,
         status: EventStatus.SCHEDULED,
-        event_date: eventData.start
+        // ✅ CORRIGIDO: usar start_date ao invés de event_date
+        start_date: eventData.start
           ? new Date(eventData.start).toISOString().split('T')[0]
           : new Date().toISOString().split('T')[0],
-        start_time: eventData.start
-          ? new Date(eventData.start).toTimeString().slice(0, 5)
+        // ✅ CORRIGIDO: usar end_date ao invés de start_time/end_time
+        end_date: eventData.end
+          ? new Date(eventData.end).toISOString().split('T')[0]
           : undefined,
-        end_time: eventData.end
-          ? new Date(eventData.end).toTimeString().slice(0, 5)
-          : undefined,
-        is_all_day: eventData.isAllDay || false,
+        // ✅ CORRIGIDO: usar all_day ao invés de is_all_day
+        all_day: eventData.isAllDay ?? true,
         project_id: eventData.projectId
           ? parseInt(eventData.projectId)
           : undefined,
@@ -371,7 +381,12 @@ const AgendaPage: React.FC = () => {
       const apiEventData: AgendaEventUpdate = {
         title: event.title,
         description: event.description,
-        event_date: new Date(event.start).toISOString().split('T')[0],
+        // ✅ CORRIGIDO: usar start_date ao invés de event_date
+        start_date: new Date(event.start).toISOString().split('T')[0],
+        end_date: event.end
+          ? new Date(event.end).toISOString().split('T')[0]
+          : undefined,
+        all_day: event.isAllDay,
         color: event.color,
       };
 
@@ -635,7 +650,7 @@ const AgendaPage: React.FC = () => {
           return (
             <Grow in={true} key={i} timeout={300 + i * 10}>
               <Box
-                onClick={() => handleCreateEvent(day.date)}
+                onClick={() => handleDateClick(day.date)}
                 sx={{
                   minHeight: 130,
                   p: 1.5,
@@ -1576,6 +1591,14 @@ const AgendaPage: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+      <DateDetailDialog
+        open={isDateDetailOpen}
+        onClose={() => setIsDateDetailOpen(false)}
+        date={expandedDate}
+        events={expandedDate ? getEventsForDay(expandedDate) : []}
+        onEventClick={handleEventClick}
+        onAddTask={handleCreateEvent}
+      />
 
       {/* Snackbar de Feedback */}
       <Snackbar

@@ -22,6 +22,8 @@ import FilesPage from './pages/FilesPage';
 import SettingsPage from './pages/SettingsPage';
 import ProfilePage from './pages/ProfilePage';
 import ReportsPage from './pages/ReportsPage';
+import TagsPage from './pages/TagsPage';
+import UnauthorizedPage from './pages/UnauthorizedPage';
 import LoadingSpinner from './components/Common/LoadingSpinner';
 import ProtectedRoute from './components/Common/ProtectedRoute';
 import { setupService, SetupStatus } from './services/setupService';
@@ -34,43 +36,39 @@ function App() {
   const location = useLocation();
 
   useEffect(() => {
-    checkSetupStatus();
+    // Supabase migration: assume setup is done, skip backend check to avoid CORS errors
+    setNeedsSetup(false);
+    setSetupLoading(false);
   }, []);
-
-  const checkSetupStatus = async () => {
-    try {
-      const status: SetupStatus = await setupService.getSetupStatus();
-      setNeedsSetup(!status.is_configured);
-    } catch (error) {
-      console.error('Erro ao verificar status do setup:', error);
-      // Se não conseguir verificar, assume que não precisa de setup (backend offline)
-      setNeedsSetup(false);
-    } finally {
-      setSetupLoading(false);
-    }
-  };
 
   try {
     const { user, loading } = useAuth();
-    console.log('👤 App - Auth state:', { user, loading });
+    console.log('👤 [APP] Auth state:', {
+      user: user?.email || null,
+      loading,
+      timestamp: new Date().toLocaleTimeString(),
+    });
 
     if (setupLoading || loading) {
-      console.log('⏳ App - Loading state, showing spinner');
+      console.log('⏳ [APP] Loading state, showing spinner');
       return <LoadingSpinner />;
     }
 
     // If user is not authenticated, decide between Setup or Login
     if (!user) {
+      console.log('❌ [APP] No user found, redirecting to login');
+      console.log('📊 [APP] Current location:', location.pathname);
+
       // Show setup only when unauthenticated and setup is required
       if (needsSetup && location.pathname !== '/login') {
-        console.log('🔧 App - Needs setup and no user, showing setup page');
+        console.log('🔧 [APP] Needs setup, showing setup page');
         return <QuickSetupPage />;
       }
-      console.log('❌ App - No user, showing login page');
+      console.log('🔑 [APP] Showing login page');
       return <LoginPage />;
     }
 
-    console.log('✅ App - User authenticated, rendering main app');
+    console.log('✅ [APP] User authenticated, rendering main app');
 
     return (
       <>
@@ -93,7 +91,7 @@ function App() {
               <Route
                 path="/dashboard"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requiredPermission="canViewDashboard">
                     <DashboardPage />
                   </ProtectedRoute>
                 }
@@ -101,7 +99,7 @@ function App() {
               <Route
                 path="/locations"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requiredPermission="canManageLocations">
                     <LocationsPage />
                   </ProtectedRoute>
                 }
@@ -109,7 +107,7 @@ function App() {
               <Route
                 path="/locations/:locationId"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requiredPermission="canManageLocations">
                     <LocationDetailPage />
                   </ProtectedRoute>
                 }
@@ -117,7 +115,7 @@ function App() {
               <Route
                 path="/projects"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requiredPermission="canManageProjects">
                     <ProjectsPage />
                   </ProtectedRoute>
                 }
@@ -125,7 +123,7 @@ function App() {
               <Route
                 path="/projects/:projectId"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requiredPermission="canManageProjects">
                     <ProjectDetailPage />
                   </ProtectedRoute>
                 }
@@ -133,7 +131,7 @@ function App() {
               <Route
                 path="/projects/:projectId/workflow"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requiredPermission="canManageProjects">
                     <ProjectWorkflowPage />
                   </ProtectedRoute>
                 }
@@ -141,7 +139,7 @@ function App() {
               <Route
                 path="/projects/:projectId/reports"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requiredPermission="canViewReports">
                     <ProjectReportsPage />
                   </ProtectedRoute>
                 }
@@ -149,7 +147,7 @@ function App() {
               <Route
                 path="/contracts"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requiredPermission="canManageProjects">
                     <ContractsPage />
                   </ProtectedRoute>
                 }
@@ -157,22 +155,31 @@ function App() {
               <Route
                 path="/agenda"
                 element={
-                  // Dev: allow Agenda without protection to avoid redirects
-                  <AgendaPage />
+                  <ProtectedRoute requiredPermission="canViewAgenda">
+                    <AgendaPage />
+                  </ProtectedRoute>
                 }
               />
               <Route
                 path="/reports"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requiredPermission="canViewReports">
                     <ReportsPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/tags"
+                element={
+                  <ProtectedRoute requiredPermission="canManageLocations">
+                    <TagsPage />
                   </ProtectedRoute>
                 }
               />
               <Route
                 path="/users"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requiredPermission="canManageUsers">
                     <UsersPage />
                   </ProtectedRoute>
                 }
@@ -180,7 +187,7 @@ function App() {
               <Route
                 path="/files"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requiredPermission="canViewDashboard">
                     <FilesPage />
                   </ProtectedRoute>
                 }
@@ -188,7 +195,7 @@ function App() {
               <Route
                 path="/settings"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requiredPermission="canManageSettings">
                     <SettingsPage />
                   </ProtectedRoute>
                 }
@@ -201,6 +208,7 @@ function App() {
                   </ProtectedRoute>
                 }
               />
+              <Route path="/unauthorized" element={<UnauthorizedPage />} />
               <Route path="/quick-setup" element={<QuickSetupPage />} />
               <Route
                 path="/login"

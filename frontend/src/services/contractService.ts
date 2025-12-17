@@ -1,253 +1,156 @@
-import { apiService, normalizeListResponse } from './api';
+import { supabase } from '../config/supabaseClient';
 
 export interface Contract {
-  id: string;
+  id: number;
   title: string;
-  project_id: string;
-  location_id: string;
-  status: 'draft' | 'pending' | 'approved' | 'signed' | 'cancelled';
-  created_at: string;
-  updated_at: string;
+  description?: string;
+  project_id?: number;
+  location_id?: number;
+  supplier_id?: number;
+  status: 'draft' | 'pending' | 'active' | 'completed' | 'cancelled';
+  value?: number;
+  start_date?: string;
+  end_date?: string;
+  terms?: string;
+  created_by?: number;
+  created_at?: string;
+  updated_at?: string;
 }
 
-export interface ContractCreate {
-  title: string;
-  project_id: string;
-  location_id: string;
-  content?: string;
-}
+// Contracts table may not exist yet in Supabase
+const MOCK_CONTRACTS: Contract[] = [];
 
-export interface ContractUpdate {
-  title?: string;
-  content?: string;
-  status?: 'draft' | 'pending' | 'approved' | 'signed' | 'cancelled';
-}
-
-export interface ContractData {
-  project?: {
-    id: string;
-    title: string;
-    description: string;
-    start_date: Date;
-    end_date: Date;
-    budget: number;
-    responsible_user: any;
-  };
-  supplier?: {
-    id: string;
-    name: string;
-    email: string;
-    phone: string;
-    address: string;
-    cnpj: string;
-  };
-  contractor?: {
-    name: string;
-    email: string;
-    phone: string;
-    address: string;
-    cnpj: string;
-  };
-  rental?: {
-    property_address: string;
-    property_description: string;
-    rental_period_start: Date;
-    rental_period_end: Date;
-    monthly_rent: number;
-    deposit: number;
-    utilities_included: boolean;
-    additional_services: string[];
-    additional_costs: number;
-  };
-  terms?: {
-    payment_terms: string;
-    late_payment_penalty: number;
-    early_termination_penalty: number;
-    maintenance_responsibility: string;
-    insurance_required: boolean;
-    access_restrictions: string[];
-    special_conditions: string[];
-  };
-}
-
-export interface ContractTemplate {
-  id: string;
-  name: string;
-  description: string;
-  category: string;
-}
-
-export interface GeneratedContract {
-  id: string;
-  title: string;
-  content: string;
-  template_used: string;
-  generated_at: string;
-  status: string;
-}
-
-class ContractService {
+export const contractService = {
   async getContracts(): Promise<Contract[]> {
     try {
-      const response = await apiService.get<any>('/contracts');
-      return normalizeListResponse<Contract>(response, [
-        'contracts',
-        'items',
-        'results',
-      ]);
-    } catch (error) {
-      console.error('Erro ao buscar contratos:', error);
-      return [];
-    }
-  }
+      const { data, error } = await supabase
+        .from('contracts')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-  async getContract(id: string): Promise<Contract> {
-    try {
-      const response = await apiService.get(`/contracts/${id}`);
-      return response as Contract;
+      if (error) {
+        console.warn('contracts table may not exist:', error.message);
+        return MOCK_CONTRACTS;
+      }
+      return data || [];
     } catch (error) {
-      console.error('Erro ao buscar contrato:', error);
-      throw new Error('Erro ao buscar contrato');
+      console.error('Error fetching contracts:', error);
+      return MOCK_CONTRACTS;
     }
-  }
+  },
 
-  async createContract(contract: ContractCreate): Promise<Contract> {
+  async getContract(id: number): Promise<Contract | null> {
     try {
-      const response = await apiService.post('/contracts', contract);
-      return response as Contract;
+      const { data, error } = await supabase
+        .from('contracts')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (error) return null;
+      return data;
     } catch (error) {
-      console.error('Erro ao criar contrato:', error);
-      throw new Error('Erro ao criar contrato');
+      return null;
     }
-  }
+  },
+
+  async createContract(contract: Partial<Contract>): Promise<Contract> {
+    const { data, error } = await supabase
+      .from('contracts')
+      .insert([contract])
+      .select()
+      .single();
+
+    if (error) throw new Error(error.message);
+    return data;
+  },
 
   async updateContract(
-    id: string,
-    contract: ContractUpdate
+    id: number,
+    contract: Partial<Contract>
   ): Promise<Contract> {
-    try {
-      const response = await apiService.put(`/contracts/${id}`, contract);
-      return response as Contract;
-    } catch (error) {
-      console.error('Erro ao atualizar contrato:', error);
-      throw new Error('Erro ao atualizar contrato');
-    }
-  }
+    const { data, error } = await supabase
+      .from('contracts')
+      .update(contract)
+      .eq('id', id)
+      .select()
+      .single();
 
-  async deleteContract(id: string): Promise<void> {
-    try {
-      await apiService.delete(`/contracts/${id}`);
-    } catch (error) {
-      console.error('Erro ao excluir contrato:', error);
-      throw new Error('Erro ao excluir contrato');
-    }
-  }
+    if (error) throw new Error(error.message);
+    return data;
+  },
 
-  async generateContract(
-    projectId: string,
-    locationId: string
-  ): Promise<Contract> {
-    try {
-      const response = await apiService.post('/contracts/generate', {
-        project_id: projectId,
-        location_id: locationId,
-      });
-      return response as Contract;
-    } catch (error) {
-      console.error('Erro ao gerar contrato:', error);
-      throw new Error('Erro ao gerar contrato');
-    }
-  }
+  async deleteContract(id: number): Promise<void> {
+    const { error } = await supabase.from('contracts').delete().eq('id', id);
+    if (error) throw new Error(error.message);
+  },
 
-  // Métodos para o ContractGenerationModal
-  getAvailableTemplates(): ContractTemplate[] {
+  async getContractsByProject(projectId: number): Promise<Contract[]> {
+    try {
+      const { data, error } = await supabase
+        .from('contracts')
+        .select('*')
+        .eq('project_id', projectId);
+
+      if (error) return [];
+      return data || [];
+    } catch (error) {
+      return [];
+    }
+  },
+
+  async getContractsByLocation(locationId: number): Promise<Contract[]> {
+    try {
+      const { data, error } = await supabase
+        .from('contracts')
+        .select('*')
+        .eq('location_id', locationId);
+
+      if (error) return [];
+      return data || [];
+    } catch (error) {
+      return [];
+    }
+  },
+
+  async getContractsBySupplier(supplierId: number): Promise<Contract[]> {
+    try {
+      const { data, error } = await supabase
+        .from('contracts')
+        .select('*')
+        .eq('supplier_id', supplierId);
+
+      if (error) return [];
+      return data || [];
+    } catch (error) {
+      return [];
+    }
+  },
+
+  async generateContractPdf(contractId: number): Promise<Blob> {
+    throw new Error('PDF generation not available during migration');
+  },
+
+  // Returns list of available contract templates
+  getAvailableTemplates(): { id: string; name: string; description: string }[] {
     return [
       {
-        id: 'rental_property',
-        name: 'Contrato de Locação de Imóvel',
-        description: 'Template padrão para locação de propriedades',
-        category: 'Locação',
+        id: 'location-rental',
+        name: 'Contrato de Locação',
+        description: 'Modelo padrão para aluguel de locação',
       },
       {
-        id: 'equipment_rental',
-        name: 'Contrato de Locação de Equipamentos',
-        description: 'Template para locação de equipamentos de produção',
-        category: 'Equipamentos',
-      },
-      {
-        id: 'service_provider',
+        id: 'service-provider',
         name: 'Contrato de Prestação de Serviços',
-        description: 'Template para contratos de serviços',
-        category: 'Serviços',
+        description: 'Modelo para fornecedores de serviços',
+      },
+      {
+        id: 'production-agreement',
+        name: 'Acordo de Produção',
+        description: 'Modelo para acordos de produção cinematográfica',
       },
     ];
-  }
+  },
+};
 
-  async generateContractFromTemplate(
-    data: ContractData,
-    templateId: string
-  ): Promise<GeneratedContract> {
-    try {
-      // Simular geração de contrato
-      const contract: GeneratedContract = {
-        id: `contract_${Date.now()}`,
-        title: `Contrato - ${data.project?.title || 'Projeto'}`,
-        content: this.generateContractContent(data, templateId),
-        template_used: templateId,
-        generated_at: new Date().toISOString(),
-        status: 'draft',
-      };
-      return contract;
-    } catch (error) {
-      console.error('Erro ao gerar contrato:', error);
-      throw new Error('Erro ao gerar contrato');
-    }
-  }
-
-  private generateContractContent(
-    data: ContractData,
-    templateId: string
-  ): string {
-    // Gerar conteúdo do contrato baseado no template
-    return `
-CONTRATO DE LOCAÇÃO
-
-Projeto: ${data.project?.title || ''}
-Fornecedor: ${data.supplier?.name || ''}
-Período: ${data.rental?.rental_period_start?.toLocaleDateString() || ''} a ${
-      data.rental?.rental_period_end?.toLocaleDateString() || ''
-    }
-Valor: R$ ${data.rental?.monthly_rent || 0}
-
-Termos e condições conforme acordado.
-    `.trim();
-  }
-
-  async exportToPDF(contract: GeneratedContract): Promise<string> {
-    try {
-      // Simular exportação para PDF
-      const blob = new Blob([contract.content], { type: 'text/plain' });
-      return URL.createObjectURL(blob);
-    } catch (error) {
-      console.error('Erro ao exportar PDF:', error);
-      throw new Error('Erro ao exportar PDF');
-    }
-  }
-
-  async saveContract(contract: GeneratedContract): Promise<Contract> {
-    try {
-      const contractData: ContractCreate = {
-        title: contract.title,
-        project_id: '1', // ID do projeto
-        location_id: '1', // ID da locação
-        content: contract.content,
-      };
-      return await this.createContract(contractData);
-    } catch (error) {
-      console.error('Erro ao salvar contrato:', error);
-      throw new Error('Erro ao salvar contrato');
-    }
-  }
-}
-
-export const contractService = new ContractService();
+export default contractService;

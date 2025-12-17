@@ -1,4 +1,4 @@
-import { apiService } from './api';
+import { supabase } from '../config/supabaseClient';
 import { Location, LocationStatus, SectorType, SpaceType } from '../types/user';
 import { PayloadValidator, validatePayload } from '../utils/validation';
 
@@ -37,11 +37,52 @@ export interface SearchResponse {
 }
 
 class LocationService {
+  // Cache de requests em andamento para evitar duplicatas
+  private pendingRequests: Map<string, Promise<any>> = new Map();
+
+  /**
+   * Wrapper para requests com deduplication
+   * Evita múltiplas chamadas simultâneas para o mesmo recurso
+   */
+  private async withDeduplication<T>(
+    key: string,
+    requestFn: () => Promise<T>
+  ): Promise<T> {
+    // Se já existe uma request em andamento, retorna ela
+    if (this.pendingRequests.has(key)) {
+      console.log(`🔄 Reusing pending request for: ${key}`);
+      return this.pendingRequests.get(key) as Promise<T>;
+    }
+
+    // Cria nova request
+    const request = requestFn().finally(() => {
+      // Remove do cache quando completar
+      this.pendingRequests.delete(key);
+    });
+
+    // Armazena no cache
+    this.pendingRequests.set(key, request);
+
+    return request;
+  }
+
   // Normalize client-side enums/values to backend equivalents
   private normalizeForBackend(payload: Partial<Location>): any {
     const clone: any = { ...(payload as any) };
 
-    // Map space_type values to backend enum: studio|house|warehouse|office|outdoor|custom
+    // 0. Ensure slug is unique by appending timestamp
+    if (clone.slug) {
+      // Append timestamp to make unique
+      clone.slug = `${clone.slug}-${Date.now()}`;
+    } else if (clone.title) {
+      // Generate slug from title if not provided
+      clone.slug = `${clone.title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '')}-${Date.now()}`;
+    }
+
+    // 1. Map space_type values/enums
     const mapSpace: Record<string, string> = {
       indoor: 'studio',
       outdoor: 'outdoor',
@@ -57,107 +98,196 @@ class LocationService {
     if (st) {
       const key = String(st).toLowerCase();
       clone.space_type = mapSpace[key] || key;
-      delete (clone as any).spaceType; // ensure single key
+      delete (clone as any).spaceType;
     }
 
-    // Normalize sector_type/status to lowercase strings if present
-    if (clone.sector_type)
-      clone.sector_type = String(clone.sector_type).toLowerCase();
+    // 2. Handle sector_type (DB uses singular column, not array)
+    // Frontend might send 'sector_types' array or 'sector_type' string
+    if (
+      clone.sector_types &&
+      Array.isArray(clone.sector_types) &&
+      clone.sector_types.length > 0
+    ) {
+      clone.sector_type = clone.sector_types[0]; // Take first value
+    }
+    // Delete the array version - DB uses singular column
+    delete clone.sector_types;
+
     if (clone.status) clone.status = String(clone.status).toLowerCase();
+
+    // 3. Map 'has_*' fields to accessibility_features JSONB
+    const accessibilityFeatures: Record<string, boolean> =
+      clone.accessibility_features || {};
+    const featureKeys = [
+      'has_parking',
+      'has_electricity',
+      'has_water',
+      'has_bathroom',
+      'has_kitchen',
+      'has_air_conditioning',
+    ];
+
+    featureKeys.forEach(key => {
+      if (key in clone) {
+        if (clone[key] !== undefined) {
+          accessibilityFeatures[key] = clone[key];
+        }
+        delete clone[key]; // Remove from top level
+      }
+    });
+    clone.accessibility_features = accessibilityFeatures;
+
+    // 4. Map available_from/to to availability_json keys
+    const availabilityJson: Record<string, any> = clone.availability_json || {};
+
+    // Always move values if present, then always delete keys
+    if (clone.available_from !== undefined) {
+      availabilityJson.available_from = clone.available_from;
+    }
+    if (clone.available_to !== undefined) {
+      availabilityJson.available_to = clone.available_to;
+    }
+
+    delete clone.available_from;
+    delete clone.available_to;
+
+    clone.availability_json = availabilityJson;
+
+    // 5. Remove relations and non-existent columns
+    delete clone.tags;
+    delete clone.photos;
+    delete clone.supplier;
+    delete clone.project;
+    delete clone.distance; // If exists from search
+    delete clone.relevance; // If exists from search
 
     return clone;
   }
   async getLocations(
     params: AdvancedSearchParams = {}
   ): Promise<SearchResponse> {
-    try {
-      console.log('📍 LocationService.getLocations - Iniciando busca:', params);
+    // Criar chave única para esta busca
+    const cacheKey = `locations-${JSON.stringify(params)}`;
 
-      const queryParams = new URLSearchParams();
+    return this.withDeduplication(cacheKey, async () => {
+      try {
+        console.log(
+          '📍 LocationService.getLocations - Iniciando busca (Supabase):',
+          params
+        );
 
-      if (params.page) queryParams.append('page', params.page.toString());
-      if (params.page_size)
-        queryParams.append('page_size', params.page_size.toString());
-      if (params.supplier_ids && params.supplier_ids.length)
-        queryParams.append('supplier_ids', params.supplier_ids.join(','));
-      if (params.status) queryParams.append('status', params.status.join(','));
-      if (params.city) queryParams.append('city', params.city.join(','));
-      if (params.include)
-        queryParams.append('include', params.include.join(','));
+        let query = supabase
+          .from('locations')
+          .select('*, photos:location_photos(*)', { count: 'exact' });
 
-      const qs = queryParams.toString();
-      const response = await apiService.get<any>(
-        qs ? `/locations?${qs}` : '/locations'
-      );
+        // --- Filtros Básicos ---
+        if (params.supplier_ids && params.supplier_ids.length > 0) {
+          query = query.in('supplier_id', params.supplier_ids);
+        }
 
-      // Accept both array and object responses
-      const result: SearchResponse = Array.isArray(response)
-        ? {
-            locations: response,
-            total: response.length,
-            page: params.page || 1,
-            page_size: params.page_size || 12,
-            total_pages: 1,
-            facets: {},
-          }
-        : {
-            locations: response?.locations || [],
-            total: response?.total || (response?.locations?.length ?? 0),
-            page: response?.page || 1,
-            page_size: response?.page_size || params.page_size || 12,
-            total_pages:
-              response?.total_pages ||
-              Math.max(
-                1,
-                Math.ceil(
-                  ((response?.total as number) || 0) / (params.page_size || 12)
-                )
-              ),
-            facets: response?.facets || {},
-          };
+        if (params.status && params.status.length > 0) {
+          query = query.in('status', params.status);
+        }
 
-      console.log('✅ LocationService.getLocations - Sucesso:', result);
-      return result;
-    } catch (error) {
-      console.error(
-        '❌ LocationService.getLocations - Erro (sem fallback mock):',
-        error
-      );
-      throw error;
-    }
+        if (params.city && params.city.length > 0) {
+          query = query.in('city', params.city);
+        }
+
+        if (params.state && params.state.length > 0) {
+          query = query.in('state', params.state);
+        }
+
+        if (params.country && params.country.length > 0) {
+          query = query.in('country', params.country);
+        }
+
+        if (params.space_type && params.space_type.length > 0) {
+          // Mapear se necessário, ou assumir que o frontend já envia valores corretos
+          query = query.in('space_type', params.space_type);
+        }
+
+        // --- Filtros Numéricos ---
+        if (params.capacity) {
+          if (params.capacity.min !== undefined)
+            query = query.gte('capacity', params.capacity.min);
+          if (params.capacity.max !== undefined)
+            query = query.lte('capacity', params.capacity.max);
+        }
+
+        // --- Busca Textual (q) ---
+        if (params.q) {
+          // Busca textual
+          const term = params.q;
+          const filterString =
+            'title.ilike.%' +
+            term +
+            '%,description.ilike.%' +
+            term +
+            '%,city.ilike.%' +
+            term +
+            '%';
+          query = query.or(filterString);
+        }
+
+        // --- Filtros Especiais (Tags, Sector) ---
+        if (params.sector_type && params.sector_type.length > 0) {
+          // DB uses singular 'sector_type' (Enum)
+          // .in() works for checking if the column value is present in the list of filter values
+          query = query.in('sector_type', params.sector_type);
+        }
+
+        // --- Paginação ---
+        const page = params.page || 1;
+        const pageSize = params.page_size || 12;
+        const from = (page - 1) * pageSize;
+        const to = from + pageSize - 1;
+
+        query = query.range(from, to);
+
+        // --- Ordenação ---
+        if (params.sort && params.sort.length > 0) {
+          params.sort.forEach(s => {
+            query = query.order(s.field, { ascending: s.direction === 'asc' });
+          });
+        } else {
+          query = query.order('created_at', { ascending: false });
+        }
+
+        const { data, error, count } = await query;
+
+        if (error) throw error;
+
+        const total = count || 0;
+        const totalPages = Math.ceil(total / pageSize);
+
+        const result: SearchResponse = {
+          locations: (data as Location[]) || [],
+          total: total,
+          page: page,
+          page_size: pageSize,
+          total_pages: totalPages > 0 ? totalPages : 1,
+          facets: {}, // Facetas exigem queries de agregação separadas
+        };
+
+        console.log(
+          '✅ LocationService.getLocations - Sucesso:',
+          result.locations.length,
+          'itens'
+        );
+        return result;
+      } catch (error: any) {
+        console.error(
+          '❌ LocationService.getLocations - Erro (Supabase):',
+          error
+        );
+        throw error;
+      }
+    });
   }
 
   async searchLocations(params: AdvancedSearchParams): Promise<SearchResponse> {
-    try {
-      console.log(
-        '🔍 LocationService.searchLocations - Iniciando busca:',
-        params
-      );
-
-      const response = await apiService.post<SearchResponse>(
-        '/locations/search',
-        params
-      );
-
-      // Garantir que sempre retornamos um objeto válido
-      const result: SearchResponse = {
-        locations: response?.locations || [],
-        total: response?.total || 0,
-        page: response?.page || 1,
-        page_size: response?.page_size || 10,
-        total_pages: response?.total_pages || 0,
-        facets: response?.facets || {},
-      };
-
-      console.log('✅ LocationService.searchLocations - Sucesso:', result);
-      return result;
-    } catch (error) {
-      console.error(
-        '❌ LocationService.searchLocations - Erro (sem fallback mock):',
-        error
-      );
-      throw error;
-    }
+    // Alias para getLocations, já que agora tratamos tudo num lugar só
+    return this.getLocations(params);
   }
 
   // Mock locations removidos para produção
@@ -165,105 +295,91 @@ class LocationService {
   async getLocation(id: number): Promise<Location> {
     try {
       console.log(
-        `📍 LocationService.getLocation - Buscando locação ID: ${id}`
+        '📍 LocationService.getLocation - Buscando locação ID: ' +
+          id +
+          ' (Supabase)'
       );
 
-      const response = await apiService.get<Location>(`/locations/${id}`);
+      const { data, error } = await supabase
+        .from('locations')
+        .select(
+          '*, supplier:suppliers (*), photos:location_photos (*), tags:location_tags (*)'
+        )
+        .eq('id', id)
+        .single();
 
-      if (!response) {
-        throw new Error('Resposta vazia do servidor');
-      }
+      if (error) throw error;
+      if (!data) throw new Error('Locação não encontrada');
 
-      console.log('✅ LocationService.getLocation - Sucesso:', response);
-      return response;
-    } catch (error) {
-      console.error('❌ LocationService.getLocation - Erro:', error);
-
-      throw new Error(`Locação com ID ${id} não encontrada ou erro na API`);
+      console.log('✅ LocationService.getLocation - Sucesso:', data);
+      return data as Location;
+    } catch (error: any) {
+      console.error('❌ LocationService.getLocation - Erro (Supabase):', error);
+      throw new Error('Locação com ID ' + id + ' não encontrada');
     }
   }
 
   async createLocation(locationData: Partial<Location>): Promise<Location> {
+    const startTime = Date.now();
+
     try {
       console.log(
-        '📍 LocationService.createLocation - Validando dados da locação'
+        '📍 LocationService.createLocation - Validando dados (Supabase)'
       );
 
-      // Validar payload antes de enviar
       const normalized = this.normalizeForBackend(locationData);
+
       const validatedData = validatePayload(
         normalized,
         PayloadValidator.validateLocationCreate,
         'criação de locação'
       );
 
-      console.log(
-        '✅ LocationService.createLocation - Dados validados, enviando para API'
-      );
-      const response = await apiService.post<Location>(
-        '/locations',
-        validatedData
-      );
+      // Ensure sector_types is array [REMOVED - DB uses SINGULAR sector_type]
+      // if (validatedData.sector_type && !validatedData.sector_types) {
+      //   validatedData.sector_types = [validatedData.sector_type];
+      //   delete validatedData.sector_type;
+      // }
 
-      console.log(
-        '✅ LocationService.createLocation - Locação criada com sucesso:',
-        response
-      );
-      return response;
-    } catch (error: any) {
-      console.error('❌ LocationService.createLocation - Erro:', error);
+      console.log('✅ LocationService.createLocation - Enviando para Supabase');
 
-      // Se for erro de validação, relançar com mensagem clara
-      if (error.message.includes('Dados inválidos')) {
+      const { data, error } = await supabase
+        .from('locations')
+        .insert([validatedData])
+        .select()
+        .single();
+
+      if (error) {
+        // Detectar e reportar erro RLS específico
+        if (error.code === '42501' || error.message?.includes('policy')) {
+          console.error(
+            '🚫 ERRO RLS detectado ao criar locação:',
+            '\n',
+            'Tabela: locations',
+            '\n',
+            'Operação: INSERT',
+            '\n',
+            'Verifique as políticas RLS no Supabase Dashboard.',
+            '\n',
+            'Erro detalhado:',
+            error
+          );
+        }
         throw error;
       }
 
-      // Detectar se é erro de conexão
-      const isConnectionError =
-        error?.code === 'ECONNREFUSED' ||
-        error?.code === 'ERR_NETWORK' ||
-        error?.message?.includes('ERR_CONNECTION_REFUSED') ||
-        error?.message?.includes('Network Error') ||
-        !apiService.isApiOnline();
+      console.log('✅ LocationService.createLocation - Sucesso:', data);
+      console.log(`⏱️ Tempo de operação: ${Date.now() - startTime}ms`);
+      return data as Location;
+    } catch (error: any) {
+      console.error(
+        '❌ LocationService.createLocation - Erro (Supabase):',
+        error
+      );
+      console.error(`⏱️ Falhou após: ${Date.now() - startTime}ms`);
 
-      if (isConnectionError) {
-        console.log('🔧 Usando dados mock para criar locação');
-        const mockLocation: Location = {
-          id: Date.now(),
-          title: locationData.title || 'Nova Locação',
-          slug: locationData.slug || 'nova-locacao',
-          summary: locationData.summary || '',
-          description: locationData.description || '',
-          status: locationData.status || LocationStatus.DRAFT,
-          sector_type: locationData.sector_type || SectorType.CINEMA,
-          space_type: locationData.space_type || SpaceType.INDOOR,
-          currency: locationData.currency || 'BRL',
-          country: locationData.country || 'Brasil',
-          city: locationData.city || '',
-          state: locationData.state || '',
-          capacity: locationData.capacity || 0,
-          area_size: locationData.area_size || 0,
-          available_from: locationData.available_from || '',
-          available_to: locationData.available_to || '',
-          has_parking: locationData.has_parking || false,
-          has_electricity: locationData.has_electricity || false,
-          has_water: locationData.has_water || false,
-          has_bathroom: locationData.has_bathroom || false,
-          has_kitchen: locationData.has_kitchen || false,
-          has_air_conditioning: locationData.has_air_conditioning || false,
-          price_day_cinema: locationData.price_day_cinema || 0,
-          price_hour_cinema: locationData.price_hour_cinema || 0,
-          price_day_publicidade: locationData.price_day_publicidade || 0,
-          price_hour_publicidade: locationData.price_hour_publicidade || 0,
-          // supplier reference not used in mock
-          tags: locationData.tags || [],
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-        return mockLocation;
-      }
-
-      throw new Error('Não foi possível criar a locação');
+      if (error.message?.includes('Dados inválidos')) throw error;
+      throw new Error('Não foi possível criar a locação: ' + error.message);
     }
   }
 
@@ -274,129 +390,45 @@ class LocationService {
     primaryIndex?: number
   ): Promise<Location> {
     try {
-      // Validar campo obrigatório
-      if (!locationData.title || locationData.title.trim() === '') {
-        throw new Error('O campo Título é obrigatório');
-      }
-
-      const data = locationData as any;
-      const form = new FormData();
-
-      // Explicitly map fields to avoid issues with generic iteration
-      form.append('title', data.title);
-      if (data.summary) form.append('summary', data.summary);
-      if (data.description) form.append('description', data.description);
-      if (data.status) form.append('status', String(data.status).toLowerCase());
-
-      // Handle sector_type
-      if (data.sector_type) {
-        form.append('sector_type', String(data.sector_type).toLowerCase());
-      }
-
-      // Handle space_type mapping
-      if (data.space_type) {
-        const mapSpace: Record<string, string> = {
-          indoor: 'studio',
-          outdoor: 'outdoor',
-          studio: 'studio',
-          location: 'house',
-          room: 'custom',
-          area: 'custom',
-        };
-        const st = String(data.space_type).toLowerCase();
-        form.append('space_type', mapSpace[st] || st);
-      }
-
-      if (data.currency) form.append('currency', data.currency);
-      if (data.country) form.append('country', data.country);
-
-      // Numeric fields - allow 0, skip undefined/null
-      const appendIfDefined = (key: string, val: any) => {
-        if (val !== undefined && val !== null && val !== '') {
-          form.append(key, String(val));
-        }
-      };
-
-      appendIfDefined('supplier_id', data.supplier_id);
-      appendIfDefined('price_day_cinema', data.price_day_cinema);
-      appendIfDefined('price_hour_cinema', data.price_hour_cinema);
-      appendIfDefined('price_day_publicidade', data.price_day_publicidade);
-      appendIfDefined('price_hour_publicidade', data.price_hour_publicidade);
-      appendIfDefined('capacity', data.capacity);
-      appendIfDefined('area_size', data.area_size);
-      appendIfDefined('parking_spots', data.parking_spots);
-      appendIfDefined('project_id', data.project_id);
-      appendIfDefined('responsible_user_id', data.responsible_user_id);
-
-      // Address & Contact
-      if (data.street) form.append('street', data.street);
-      if (data.number) form.append('number', data.number);
-      if (data.complement) form.append('complement', data.complement);
-      if (data.neighborhood) form.append('neighborhood', data.neighborhood);
-      if (data.city) form.append('city', data.city);
-      if (data.state) form.append('state', data.state);
-      if (data.postal_code) form.append('postal_code', data.postal_code);
-
-      if (data.supplier_name) form.append('supplier_name', data.supplier_name);
-      if (data.supplier_phone)
-        form.append('supplier_phone', data.supplier_phone);
-      if (data.supplier_email)
-        form.append('supplier_email', data.supplier_email);
-      if (data.contact_person)
-        form.append('contact_person', data.contact_person);
-      if (data.contact_phone) form.append('contact_phone', data.contact_phone);
-      if (data.contact_email) form.append('contact_email', data.contact_email);
-
-      // Specs
-      if (data.power_specs) form.append('power_specs', data.power_specs);
-      if (data.noise_level) form.append('noise_level', data.noise_level);
-      if (data.acoustic_treatment)
-        form.append('acoustic_treatment', data.acoustic_treatment);
-
-      // Photos
-      files.forEach((file, idx) => {
-        form.append('photos', file, file.name);
-        const caption = captions[idx] ?? '';
-        form.append('photo_captions', caption);
-      });
-
-      if (typeof primaryIndex === 'number') {
-        form.append('primary_photo_index', String(primaryIndex));
-      }
-
-      console.log('📤 Sending FormData for Create:', Array.from(form.keys()));
-
-      const createdLocation = await apiService.post<Location>(
-        '/locations/with-photos',
-        form
+      console.log(
+        '📍 LocationService.createLocationWithPhotos - Iniciando (Supabase)'
       );
 
-      // If tags are present, update the location with tags (creation endpoint doesn't support tags)
-      if (data.tags && data.tags.length > 0) {
-        try {
-          console.log('Adding tags to new location:', data.tags);
-          await this.updateLocation(createdLocation.id, { tags: data.tags });
-          // Re-fetch to get complete object with tags
-          return await this.getLocation(createdLocation.id);
-        } catch (tagError) {
-          console.error(
-            'Warning: Location created but failed to add tags',
-            tagError
+      // 1. Create Location
+      const createdLocation = await this.createLocation(locationData);
+      const locationId = createdLocation.id;
+
+      // 2. Upload Photos if any
+      if (files && files.length > 0) {
+        console.log('📸 Uploading ' + files.length + ' photos...');
+
+        // Upload sequentially or parallel - sequentially might be safer for order
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i];
+          const caption = captions[i] || '';
+          const isPrimary =
+            typeof primaryIndex === 'number' && i === primaryIndex;
+
+          await this.uploadLocationPhoto(
+            locationId,
+            file,
+            caption,
+            isPrimary,
+            progress =>
+              console.log('Photo ' + (i + 1) + ' progress: ' + progress + '%')
           );
-          // Return created location anyway, don't block
-          return createdLocation;
         }
       }
 
-      return createdLocation;
+      // 3. Return complete location
+      return await this.getLocation(locationId);
     } catch (error: any) {
       console.error(
         '❌ LocationService.createLocationWithPhotos - Erro:',
-        error.response?.data || error
+        error
       );
       throw new Error(
-        error.response?.data?.detail ||
-          'Não foi possível criar a locação com fotos'
+        'Não foi possível criar a locação com fotos: ' + error.message
       );
     }
   }
@@ -408,137 +440,61 @@ class LocationService {
     try {
       const normalized = this.normalizeForBackend(locationData);
 
-      const allowedKeys = new Set([
-        'title',
-        'slug',
-        'summary',
-        'description',
-        'status',
-        'sector_type',
-        'supplier_id',
-        'price_day_cinema',
-        'price_hour_cinema',
-        'price_day_publicidade',
-        'price_hour_publicidade',
-        'currency',
-        'street',
-        'number',
-        'complement',
-        'neighborhood',
-        'city',
-        'state',
-        'country',
-        'postal_code',
-        'supplier_name',
-        'supplier_phone',
-        'supplier_email',
-        'contact_person',
-        'contact_phone',
-        'contact_email',
-        'space_type',
-        'capacity',
-        'area_size',
-        'power_specs',
-        'noise_level',
-        'acoustic_treatment',
-        'parking_spots',
-        'project_id',
-        'responsible_user_id',
-        'cover_photo_url',
-        'accessibility_features',
-        'tag_ids',
-      ]);
+      const { data, error } = await supabase
+        .from('locations')
+        .update(normalized)
+        .eq('id', id)
+        .select()
+        .single();
 
-      const payload: Record<string, any> = {};
-      Object.entries(normalized).forEach(([key, value]) => {
-        if (!allowedKeys.has(key)) return;
-        if (value === undefined) return;
-        payload[key] = value;
-      });
-
-      if ('tags' in locationData) {
-        const tagsRaw = (locationData as any).tags;
-        if (Array.isArray(tagsRaw)) {
-          const tagIds = tagsRaw
-            .map(tag => {
-              if (typeof tag === 'object' && tag !== null) {
-                return tag.id ?? tag.tag_id ?? tag.tagId;
-              }
-              return tag;
-            })
-            .map(tagId => {
-              const num = Number(tagId);
-              return Number.isNaN(num) ? undefined : num;
-            })
-            .filter((id): id is number => typeof id === 'number');
-
-          payload.tag_ids = tagIds;
-        }
-      }
-
-      const response = await apiService.put<Location>(
-        `/locations/${id}`,
-        payload
-      );
-      return response;
+      if (error) throw error;
+      return data as Location;
     } catch (error: any) {
-      console.error('Erro ao atualizar locação:', error);
-
-      // Detectar se é erro de conexão
-      const isConnectionError =
-        error?.code === 'ECONNREFUSED' ||
-        error?.code === 'ERR_NETWORK' ||
-        error?.message?.includes('ERR_CONNECTION_REFUSED') ||
-        error?.message?.includes('Network Error') ||
-        !apiService.isApiOnline();
-
-      if (isConnectionError) {
-        console.log('🔧 Usando dados mock para atualizar locação');
-        const mockLocation: Location = {
-          id: id,
-          title: locationData.title || 'Locação Atualizada',
-          slug: locationData.slug || 'locacao-atualizada',
-          summary: locationData.summary || '',
-          description: locationData.description || '',
-          status: locationData.status || LocationStatus.DRAFT,
-          sector_type: locationData.sector_type || SectorType.CINEMA,
-          space_type: locationData.space_type || SpaceType.INDOOR,
-          currency: locationData.currency || 'BRL',
-          country: locationData.country || 'Brasil',
-          city: locationData.city || '',
-          state: locationData.state || '',
-          capacity: locationData.capacity || 0,
-          area_size: locationData.area_size || 0,
-          available_from: locationData.available_from || '',
-          available_to: locationData.available_to || '',
-          has_parking: locationData.has_parking || false,
-          has_electricity: locationData.has_electricity || false,
-          has_water: locationData.has_water || false,
-          has_bathroom: locationData.has_bathroom || false,
-          has_kitchen: locationData.has_kitchen || false,
-          has_air_conditioning: locationData.has_air_conditioning || false,
-          price_day_cinema: locationData.price_day_cinema || 0,
-          price_hour_cinema: locationData.price_hour_cinema || 0,
-          price_day_publicidade: locationData.price_day_publicidade || 0,
-          price_hour_publicidade: locationData.price_hour_publicidade || 0,
-          // supplier reference not used in mock
-          tags: locationData.tags || [],
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-        return mockLocation;
-      }
-
+      console.error('Erro ao atualizar locação (Supabase):', error);
       throw new Error('Não foi possível atualizar a locação');
     }
   }
 
   async deleteLocation(id: number): Promise<void> {
     try {
-      await apiService.delete(`/locations/${id}`);
-    } catch (error) {
-      console.error('Erro ao excluir locação:', error);
-      throw new Error('Não foi possível excluir a locação');
+      console.log(
+        `🗑️ LocationService.deleteLocation - Excluindo dependências da locação ${id}`
+      );
+
+      // 1. Excluir Project Locations (associações)
+      const { error: plError } = await supabase
+        .from('project_locations')
+        .delete()
+        .eq('location_id', id);
+      if (plError)
+        console.warn('Erro ao excluir associações de projeto:', plError);
+
+      // 2. Excluir Location Photos (DB records only - storage cleanup requires backend or trigger)
+      const { error: photoError } = await supabase
+        .from('location_photos')
+        .delete()
+        .eq('location_id', id);
+      if (photoError)
+        console.warn('Erro ao excluir registros de fotos:', photoError);
+
+      // 3. Excluir Location Tags
+      const { error: tagsError } = await supabase
+        .from('location_tags')
+        .delete()
+        .eq('location_id', id);
+      if (tagsError)
+        console.warn('Erro ao excluir tags da locação:', tagsError);
+
+      // 4. Excluir Locação
+      console.log('🗑️ LocationService.deleteLocation - Excluindo locação');
+      const { error } = await supabase.from('locations').delete().eq('id', id);
+
+      if (error) throw error;
+    } catch (error: any) {
+      console.error('Erro ao excluir locação (Supabase):', error);
+      throw new Error(
+        'Não foi possível excluir a locação. Verifique se existem projetos vinculados ativos.'
+      );
     }
   }
 
@@ -550,42 +506,64 @@ class LocationService {
     onProgress?: (progress: number) => void
   ): Promise<any> {
     try {
-      const formData = new FormData();
-      formData.append('photo', file, file.name);
-      if (caption) formData.append('caption', caption);
-      if (typeof isPrimary === 'boolean') {
-        formData.append('is_primary', String(isPrimary));
-      }
+      // 1. Upload to Supabase Storage
+      const fileExt = file.name.split('.').pop();
+      const fileName = locationId + '/' + Date.now() + '.' + fileExt;
+      const filePath = fileName;
 
-      const response = await apiService.post(
-        `/locations/${locationId}/photos`,
-        formData,
-        {
-          onUploadProgress: progressEvent => {
-            if (!onProgress || !progressEvent.total) return;
-            const percent = Math.round(
-              (progressEvent.loaded * 100) / progressEvent.total
-            );
-            onProgress(percent);
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('location-photos')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false,
+        });
+
+      if (uploadError) throw uploadError;
+
+      // 2. Get Public URL
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from('location-photos').getPublicUrl(filePath);
+
+      // 3. Insert into location_photos table
+      const { data: photoData, error: dbError } = await supabase
+        .from('location_photos')
+        .insert([
+          {
+            location_id: locationId,
+            url: publicUrl,
+            caption: caption || '',
+            is_primary: isPrimary || false,
+            display_order: 0, // Default
+            // filename, original_filename, file_path columns don't exist in schema
           },
-        }
-      );
+        ])
+        .select()
+        .single();
 
-      return response;
-    } catch (error) {
-      console.error('Erro ao fazer upload da foto:', error);
+      if (dbError) throw dbError;
+
+      if (onProgress) onProgress(100); // Mock progress completion
+
+      return photoData;
+    } catch (error: any) {
+      console.error('Erro ao fazer upload da foto (Supabase):', error);
       throw new Error('Não foi possível fazer upload da foto');
     }
   }
 
   async getLocationPhotos(locationId: number): Promise<any[]> {
     try {
-      const response = await apiService.get<any[]>(
-        `/locations/${locationId}/photos`
-      );
-      return response as any[];
-    } catch (error) {
-      console.error('Erro ao obter fotos da locação:', error);
+      const { data, error } = await supabase
+        .from('location_photos')
+        .select('*')
+        .eq('location_id', locationId)
+        .order('display_order', { ascending: true });
+
+      if (error) throw error;
+      return data || [];
+    } catch (error: any) {
+      console.error('Erro ao obter fotos da locação (Supabase):', error);
       throw new Error('Erro ao obter fotos da locação');
     }
   }
@@ -595,21 +573,38 @@ class LocationService {
     photoId: number
   ): Promise<void> {
     try {
-      await apiService.delete(`/locations/${locationId}/photos/${photoId}`);
-    } catch (error) {
-      console.error('Erro ao deletar foto:', error);
-      throw new Error('Não foi possível deletar a foto');
+      // First get the photo url to extract storage path (simulated or simplified)
+      // For now just delete record from DB, trigger or manual cleanup usually needed for Storage
+      const { error } = await supabase
+        .from('location_photos')
+        .delete()
+        .eq('id', photoId);
+      if (error) throw error;
+    } catch (error: any) {
+      console.error('Erro ao deletar foto (Supabase):', error);
+      throw new Error('Erro ao deletar foto');
     }
   }
 
   async setCoverPhoto(locationId: number, photoId: number): Promise<void> {
     try {
-      await apiService.put(
-        `/locations/${locationId}/photos/${photoId}/cover`,
-        {}
-      );
-    } catch (error) {
-      console.error('Erro ao definir foto de capa:', error);
+      // Set all photos for this location to not primary
+      const { error: updateError } = await supabase
+        .from('location_photos')
+        .update({ is_primary: false })
+        .eq('location_id', locationId);
+
+      if (updateError) throw updateError;
+
+      // Set the specified photo as primary
+      const { error: primaryError } = await supabase
+        .from('location_photos')
+        .update({ is_primary: true })
+        .eq('id', photoId);
+
+      if (primaryError) throw primaryError;
+    } catch (error: any) {
+      console.error('Erro ao definir foto de capa (Supabase):', error);
       throw new Error('Não foi possível definir a foto de capa');
     }
   }
@@ -619,35 +614,64 @@ class LocationService {
     photoOrders: { id: number; displayOrder: number }[]
   ): Promise<void> {
     try {
-      await apiService.post(
-        `/locations/${locationId}/photos/reorder`,
-        photoOrders
-      );
-    } catch (error) {
-      console.error('Erro ao reordenar fotos:', error);
+      // Use a transaction or batch update for reordering
+      const updates = photoOrders.map(photo => ({
+        id: photo.id,
+        display_order: photo.displayOrder,
+      }));
+
+      const { error } = await supabase
+        .from('location_photos')
+        .upsert(updates, { onConflict: 'id' }); // upsert can update existing rows
+
+      if (error) throw error;
+    } catch (error: any) {
+      console.error('Erro ao reordenar fotos (Supabase):', error);
       throw new Error('Não foi possível reordenar as fotos');
     }
   }
 
   async getLocationStats(): Promise<any> {
     try {
-      const response = await apiService.get('/locations/stats/overview');
-      return response;
-    } catch (error) {
-      console.error('Erro ao obter estatísticas:', error);
-      throw new Error('Erro ao obter estatísticas');
+      const { count, error } = await supabase
+        .from('locations')
+        .select('*', { count: 'exact', head: true });
+
+      if (error) throw error;
+      return { total: count || 0 };
+    } catch (error: any) {
+      console.error('Erro ao obter estatísticas (Supabase):', error);
+      return { total: 0 };
+    }
+  }
+
+  async getSupplierLocations(supplierId: number): Promise<Location[]> {
+    try {
+      const { data, error } = await supabase
+        .from('locations')
+        .select('*')
+        .eq('supplier_id', supplierId);
+      if (error) throw error;
+      return (data as Location[]) || [];
+    } catch (error: any) {
+      console.error('Erro ao buscar locações do fornecedor (Supabase):', error);
+      return [];
     }
   }
 
   async updateLocationStatus(id: number, status: string): Promise<Location> {
     try {
-      const response = await apiService.patch<Location>(
-        `/locations/${id}/status`,
-        { status }
-      );
-      return response;
-    } catch (error) {
-      console.error('Erro ao atualizar status:', error);
+      const { data, error } = await supabase
+        .from('locations')
+        .update({ status })
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data as Location;
+    } catch (error: any) {
+      console.error('Erro ao atualizar status (Supabase):', error);
       throw new Error('Não foi possível atualizar o status');
     }
   }
@@ -656,19 +680,19 @@ class LocationService {
     params: AdvancedSearchParams,
     format: 'csv' | 'excel' = 'csv'
   ): Promise<Blob> {
-    try {
-      const response = await apiService.post<Blob>(
-        `/locations/export?format=${format}`,
-        params,
-        {
-          responseType: 'blob',
-        }
-      );
-      return response as Blob;
-    } catch (error) {
-      console.error('Erro ao exportar locações:', error);
-      throw new Error('Não foi possível exportar as locações');
-    }
+    // Export requires server-side processing or fetching all data and converting on client
+    // For now, we'll throw not implemented or simple mock
+    console.warn(
+      'Export functionality requires backend implementation or full client-side fetch'
+    );
+    throw new Error(
+      'Exportação temporariamente indisponível na migração Supabase'
+    );
+  }
+
+  // Alias for getLocation - used by LocationDetailPage
+  async getLocationById(id: number): Promise<Location> {
+    return this.getLocation(id);
   }
 }
 

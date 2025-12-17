@@ -1,3 +1,18 @@
+/**
+ * @deprecated LEGACY API CLIENT - No longer used by primary services
+ *
+ * This axios-based API service was created for the original backend API.
+ * All CRUD operations have been migrated to use direct Supabase client.
+ *
+ * Migrated services (now use supabaseClient.ts directly):
+ * - locationService, projectService, userService, tagService
+ * - supplierService, projectLocationService, visitService
+ * - authService, dashboardService
+ *
+ * This file is kept for backwards compatibility with any imports that
+ * may still use normalizeListResponse() or the apiService singleton.
+ * Consider removing this file if no longer needed.
+ */
 /// <reference types="vite/client" />
 import axios, {
   AxiosInstance,

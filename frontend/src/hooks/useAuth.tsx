@@ -3,10 +3,14 @@ import {
   useContext,
   useState,
   useEffect,
+  useRef,
   ReactNode,
 } from 'react';
 import { User, UserRole } from '../types/user';
-import { authService } from '../services/authService';
+import { supabase } from '../config/supabaseClient';
+
+// Build timestamp: 2025-12-11T03:20:00 - Forces new hash
+console.log('[Auth] Build: 2025-12-11T03:22');
 
 interface AuthContextType {
   user: User | null;
@@ -33,229 +37,294 @@ interface AuthProviderProps {
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const initializedRef = useRef(false);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
     console.log('🔄 AuthProvider useEffect triggered');
-    checkAuth();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    mountedRef.current = true;
 
-  const checkAuth = async () => {
-    try {
-      console.log('🔍 Verificando autenticação...');
+    const initialize = async () => {
+      try {
+        console.log('🔍 [SESSION RESTORE] Verificando sessão Supabase...');
+        const startTime = Date.now();
 
-      // Verificar se há login simulado
-      const isAuthenticated = localStorage.getItem('is_authenticated');
-      const currentUser = localStorage.getItem('current_user');
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
 
-      if (isAuthenticated === 'true' && currentUser) {
-        try {
-          console.log('🔑 Login simulado encontrado, carregando usuário...');
-          const userData = JSON.parse(currentUser);
-          // Validar se os dados do usuário são válidos
-          if (userData && userData.id && userData.email) {
-            // Normalizar role para enum conhecido
-            if (userData.role && typeof userData.role === 'string') {
-              const roleLower = userData.role.toLowerCase();
-              if (!(Object.values(UserRole) as string[]).includes(roleLower)) {
-                userData.role = UserRole.ADMIN; // fallback seguro se desconhecido
-              } else {
-                userData.role = roleLower as UserRole;
-              }
-            } else {
-              userData.role = UserRole.ADMIN;
+        const elapsed = Date.now() - startTime;
+        console.log(`⏱️ [SESSION RESTORE] Tempo de verificação: ${elapsed}ms`);
+
+        if (!mountedRef.current) return;
+
+        if (session?.user) {
+          console.log(
+            '✅ [SESSION RESTORE] Sessão encontrada:',
+            session.user.email
+          );
+          if (session.expires_at) {
+            console.log(
+              '🔑 [SESSION RESTORE] Token expira em:',
+              new Date(session.expires_at * 1000).toLocaleString()
+            );
+          }
+          await loadUserProfile(session.user.id);
+        } else {
+          console.log('❌ [SESSION RESTORE] Nenhuma sessão ativa');
+          setUser(null);
+        }
+      } catch (error) {
+        console.error('❌ [SESSION RESTORE] Erro ao verificar sessão:', error);
+        if (mountedRef.current) setUser(null);
+      } finally {
+        if (mountedRef.current) {
+          setLoading(false);
+          initializedRef.current = true;
+        }
+      }
+    };
+
+    initialize();
+
+    // Listen for auth state changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('🔔 Auth state changed:', event);
+
+      // Skip initial session event if we haven't initialized
+      if (event === 'INITIAL_SESSION' && !initializedRef.current) {
+        return;
+      }
+
+      if (!mountedRef.current) return;
+
+      if (session?.user) {
+        await loadUserProfile(session.user.id);
+      } else {
+        setUser(null);
+      }
+    });
+
+    // Removido: Safety timeout que causava erro AUTH TIMEOUT desnecessariamente
+    // A verificação de sessão é rápida (<100ms) e o setLoading(false) já é chamado
+    // na função initialize() dentro do bloco finally
+
+    return () => {
+      mountedRef.current = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  // Ref for mutex-like locking - storing the Promise itself
+  const loadingProfilePromise = useRef<Promise<void> | null>(null);
+
+  // Simplified profile loading - removed timeout race condition
+  const loadUserProfile = async (authId: string, authUserFallback?: User) => {
+    // If already fetching, return the existing promise to ensure caller waits
+    if (loadingProfilePromise.current) {
+      console.warn('⏳ [PROFILE] Carregamento já em andamento, aguardando...');
+      try {
+        await loadingProfilePromise.current;
+        console.log('✅ [PROFILE] Carregamento anterior concluído');
+      } catch (error) {
+        console.error('❌ [PROFILE] Erro no carregamento anterior:', error);
+      }
+      return;
+    }
+
+    // Create the process
+    const process = async () => {
+      console.log(
+        '📋 [PROFILE] Iniciando carregamento para authId:',
+        authId.substring(0, 8) + '...'
+      );
+      const startTime = Date.now();
+
+      try {
+        // Direct query without timeout race
+        console.log('🔍 [PROFILE] Buscando na tabela users...');
+        const { data: profile, error } = await supabase
+          .from('users')
+          .select('*')
+          .eq('auth_id', authId)
+          .maybeSingle();
+
+        const elapsed = Date.now() - startTime;
+        console.log(`⏱️ [PROFILE] Query completou em ${elapsed}ms`);
+
+        if (error) {
+          console.error('❌ [PROFILE RLS?] Erro ao buscar perfil:', error);
+          console.error(
+            '❌ [PROFILE] Código:',
+            error.code,
+            'Mensagem:',
+            error.message
+          );
+          throw error;
+        }
+
+        if (profile) {
+          console.log('✅ [PROFILE] Perfil encontrado:', profile.email);
+          if (mountedRef.current) {
+            setUser(profile as User);
+            setLoading(false); // ✅ Garantir que loading seja false
+          }
+          return;
+        }
+
+        // No profile found - use fallback
+        console.warn(
+          '⚠️ [PROFILE] Perfil não encontrado no banco, usando fallback'
+        );
+        throw new Error('Profile not found');
+      } catch (error: any) {
+        console.error(
+          '❌ [PROFILE] Erro ao carregar perfil:',
+          error.message || error
+        );
+
+        if (mountedRef.current) {
+          let fallbackUser = authUserFallback;
+          if (!fallbackUser) {
+            console.log('🔄 [PROFILE] Tentando fallback com auth.getUser()...');
+            const {
+              data: { user },
+            } = await supabase.auth.getUser();
+            if (user) {
+              console.log(
+                '✅ [PROFILE] User encontrado no Auth, criando fallback'
+              );
+              fallbackUser = {
+                id: user.id,
+                email: user.email || '',
+                full_name: user.user_metadata?.full_name || 'Usuário',
+                role: 'viewer' as UserRole,
+                is_active: true,
+                created_at: user.created_at,
+                updated_at: user.updated_at || user.created_at,
+                timezone: 'America/Sao_Paulo',
+                locale: 'pt-BR',
+              } as User;
             }
-            setUser(userData);
-            console.log('✅ Usuário simulado carregado:', userData);
-            setLoading(false);
-            return;
-          } else {
-            console.log('❌ Dados de usuário inválidos, limpando...');
-            localStorage.removeItem('is_authenticated');
-            localStorage.removeItem('current_user');
           }
-        } catch (parseError) {
-          console.error('❌ Erro ao fazer parse do usuário:', parseError);
-          localStorage.removeItem('is_authenticated');
-          localStorage.removeItem('current_user');
-        }
-      }
 
-      const token = localStorage.getItem('auth_token');
-      if (token) {
-        console.log('🔑 Token encontrado, buscando usuário...');
-        try {
-          const userData = await authService.getCurrentUser();
-          if (userData && userData.id && userData.email) {
-            setUser(userData);
-            console.log('✅ Usuário carregado:', userData);
-            setLoading(false);
-            return;
+          if (fallbackUser) {
+            console.log('✅ [PROFILE] Usando usuário de fallback (Auth).');
+            setUser(fallbackUser);
+            setLoading(false); // ✅ Garantir que loading seja false
           } else {
-            console.log('❌ Dados de usuário inválidos do servidor');
-            localStorage.removeItem('auth_token');
+            console.error(
+              '❌ [PROFILE] Nenhum fallback disponível, user = null'
+            );
+            setUser(null);
+            setLoading(false); // ✅ Garantir que loading seja false
           }
-        } catch (error) {
-          console.log('❌ Erro ao buscar usuário, limpando token...');
-          localStorage.removeItem('auth_token');
         }
+      } finally {
+        loadingProfilePromise.current = null;
       }
+    };
 
-      // Se chegou até aqui, fazer login automático
-      console.log(
-        '🔑 Nenhum usuário válido encontrado, fazendo login automático...'
-      );
-      await autoLogin();
-    } catch (error) {
-      console.error('❌ Erro ao verificar autenticação:', error);
-      // Limpar dados corrompidos
-      localStorage.removeItem('auth_token');
-      localStorage.removeItem('is_authenticated');
-      localStorage.removeItem('current_user');
-      await autoLogin();
-    } finally {
-      console.log('🏁 Finalizando verificação de autenticação...');
-      setLoading(false);
-    }
-  };
-
-  const autoLogin = async () => {
-    try {
-      console.log('🚀 Iniciando login automático...');
-      // Criar usuário de demonstração com dados seguros
-      const demoUser: User = {
-        id: '1',
-        full_name: 'João Silva',
-        email: 'joao.silva@cinema.com',
-        role: UserRole.ADMIN,
-        avatar_url: undefined,
-        is_active: true,
-        timezone: 'America/Sao_Paulo',
-        locale: 'pt-BR',
-        can_create_projects: true,
-        can_manage_users: true,
-        can_view_financials: true,
-        can_export_data: true,
-        email_notifications: true,
-        sms_notifications: false,
-        push_notifications: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-
-      // Validar dados do usuário antes de salvar
-      if (!demoUser.id || !demoUser.email || !demoUser.full_name) {
-        throw new Error('Dados de usuário de demonstração inválidos');
-      }
-
-      // Simular token de autenticação
-      const demoToken = 'demo_token_' + Date.now();
-      localStorage.setItem('auth_token', demoToken);
-      localStorage.setItem('is_authenticated', 'true');
-      localStorage.setItem('current_user', JSON.stringify(demoUser));
-      setUser(demoUser);
-
-      console.log(
-        '✅ Login automático realizado com usuário de demonstração:',
-        demoUser
-      );
-    } catch (error) {
-      console.error('❌ Erro no login automático:', error);
-      // Fallback: definir usuário null e parar loading
-      setUser(null);
-      setLoading(false);
-    }
+    // Store and await
+    loadingProfilePromise.current = process();
+    return loadingProfilePromise.current;
   };
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
-      // Validar entrada
       if (!email || !password) {
         console.error('❌ Email e senha são obrigatórios');
         return false;
       }
 
-      // Tentar login real primeiro
-      const { user: userData, token } = await authService.login({
+      setLoading(true);
+      console.log('🔐 Tentando login com Supabase...');
+
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
-      // Validar dados retornados
-      if (!userData || !userData.id || !userData.email || !token) {
-        throw new Error('Dados de login inválidos');
+      if (error) {
+        console.error('❌ Erro no login:', error.message);
+        setLoading(false);
+        return false;
       }
 
-      localStorage.setItem('auth_token', token);
-      localStorage.setItem('is_authenticated', 'true');
-      localStorage.setItem('current_user', JSON.stringify(userData));
-      setUser(userData);
+      if (!data.user) {
+        setLoading(false);
+        return false;
+      }
+
+      console.log('✅ Login realizado com sucesso:', data.user.email);
+      // Wait for profile load to complete before returning
+      // We pass the auth user to potentially speed up fallback
+      const fallbackUser = {
+        id: data.user.id,
+        email: data.user.email || '',
+        full_name: data.user.user_metadata?.full_name || 'Usuário',
+        role: 'viewer' as UserRole,
+        is_active: true,
+        created_at: data.user.created_at,
+        updated_at: data.user.updated_at || data.user.created_at,
+        timezone: 'America/Sao_Paulo',
+        locale: 'pt-BR',
+      } as User;
+
+      await loadUserProfile(data.user.id, fallbackUser);
+
       return true;
-    } catch (error) {
-      console.error('Erro no login real, tentando login simulado:', error);
-
-      // Login simulado para demonstração
-      if (email && password) {
-        const demoUser: User = {
-          id: '1',
-          full_name: 'Usuário Demo',
-          email: email,
-          role: UserRole.ADMIN,
-          avatar_url: undefined,
-          is_active: true,
-          timezone: 'America/Sao_Paulo',
-          locale: 'pt-BR',
-          can_create_projects: true,
-          can_manage_users: true,
-          can_view_financials: true,
-          can_export_data: true,
-          email_notifications: true,
-          sms_notifications: false,
-          push_notifications: true,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-
-        // Validar dados do usuário demo
-        if (!demoUser.id || !demoUser.email || !demoUser.full_name) {
-          console.error('❌ Dados de usuário demo inválidos');
-          return false;
-        }
-
-        const demoToken = 'demo_token_' + Date.now();
-        localStorage.setItem('auth_token', demoToken);
-        localStorage.setItem('is_authenticated', 'true');
-        localStorage.setItem('current_user', JSON.stringify(demoUser));
-        setUser(demoUser);
-
-        console.log('✅ Login simulado realizado com sucesso');
-        return true;
-      }
-
+    } catch (error: any) {
+      console.error('❌ Falha no login:', error.message);
+      setLoading(false);
       return false;
+    } finally {
+      // Ensure loading is always false at the end of explicit login attempt
+      setLoading(false);
     }
   };
 
-  const logout = () => {
-    localStorage.removeItem('auth_token');
-    localStorage.removeItem('is_authenticated');
-    localStorage.removeItem('current_user');
-    setUser(null);
+  const logout = async () => {
+    try {
+      setLoading(true); // Show loading during logout
+      console.log('🚪 Fazendo logout...');
+
+      // 1. Sign out from Supabase
+      const { error } = await supabase.auth.signOut();
+      if (error) console.error('Aviso no signOut Supabase:', error.message);
+
+      // 2. Clear local state immediately for UI responsiveness
+      setUser(null);
+      // Removido: localStorage.removeItem('auth_token');
+      // O Supabase gerencia sua própria sessão no localStorage
+
+      console.log('✅ Logout local realizado');
+    } catch (error) {
+      console.error('❌ Erro no logout:', error);
+    } finally {
+      setLoading(false); // Restore UI
+    }
   };
 
   const refreshUser = async () => {
     try {
-      const userData = await authService.getCurrentUser();
-      // Validar dados do usuário
-      if (userData && userData.id && userData.email) {
-        setUser(userData);
-        localStorage.setItem('current_user', JSON.stringify(userData));
+      setLoading(true);
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (session?.user) {
+        await loadUserProfile(session.user.id);
       } else {
-        console.error('❌ Dados de usuário inválidos ao atualizar');
-        logout();
+        setUser(null);
       }
     } catch (error) {
       console.error('Erro ao atualizar usuário:', error);
-      logout();
+      setUser(null);
+    } finally {
+      setLoading(false);
     }
   };
 

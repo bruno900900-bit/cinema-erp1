@@ -1,290 +1,262 @@
-import { apiService } from './api';
+import { supabase } from '../config/supabaseClient';
+
+// Enums for event types and statuses
+export enum EventType {
+  MEETING = 'meeting',
+  VISIT = 'visit',
+  DEADLINE = 'deadline',
+  OTHER = 'other',
+}
+
+export enum EventStatus {
+  SCHEDULED = 'scheduled',
+  COMPLETED = 'completed',
+  CANCELLED = 'cancelled',
+}
 
 export interface AgendaEvent {
   id: number;
   title: string;
   description?: string;
-  event_type: EventType;
-  status: EventStatus;
-  event_date: string;
-  start_time?: string;
-  end_time?: string;
-  is_all_day: boolean;
-  project_id?: number;
+  start_date: string; // ✅ Campo REAL do Supabase
+  end_date?: string; // ✅ Campo REAL do Supabase
+  all_day?: boolean; // ✅ Campo REAL (não is_all_day)
   location_id?: number;
-  project_location_id?: number;
-  visit_id?: number;
-  contract_id?: number;
-  metadata_json?: Record<string, any>;
+  project_id?: number;
+  user_id?: number;
+  event_type?: EventType | string;
+  status?: EventStatus | string;
+  priority?: number;
   color?: string;
-  priority: number;
-  created_at: string;
-  updated_at: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface AgendaEventCreate {
   title: string;
   description?: string;
-  event_type: EventType;
-  status?: EventStatus;
-  event_date: string;
-  start_time?: string;
-  end_time?: string;
-  is_all_day?: boolean;
-  project_id?: number;
-  location_id?: number;
-  project_location_id?: number;
-  visit_id?: number;
-  contract_id?: number;
-  metadata_json?: Record<string, any>;
-  color?: string;
+  start_date: string; // ✅ Campo REAL
+  end_date?: string; // ✅ Campo REAL
+  all_day?: boolean; // ✅ Campo REAL
+  event_type: EventType | string; // ✅ Obrigatório
+  status?: EventStatus | string;
   priority?: number;
+  color?: string;
+  location_id?: number;
+  project_id?: number;
+  user_id?: number;
 }
 
-export interface AgendaEventUpdate {
-  title?: string;
-  description?: string;
-  event_type?: EventType;
-  status?: EventStatus;
-  event_date?: string;
-  start_time?: string;
-  end_time?: string;
-  is_all_day?: boolean;
-  project_id?: number;
-  location_id?: number;
-  project_location_id?: number;
-  visit_id?: number;
-  contract_id?: number;
-  metadata_json?: Record<string, any>;
-  color?: string;
-  priority?: number;
+export interface AgendaEventUpdate extends Partial<AgendaEventCreate> {
+  status?: EventStatus | string;
 }
 
+// Filter interface for querying events
 export interface AgendaEventFilter {
-  start_date?: string;
-  end_date?: string;
-  event_type?: EventType;
-  status?: EventStatus;
+  startDate?: string | Date;
+  endDate?: string | Date;
   project_id?: number;
   location_id?: number;
-  priority?: number;
+  user_id?: number;
+  event_type?: EventType | string;
+  status?: EventStatus | string;
 }
 
-export interface AgendaEventListResponse {
-  events: AgendaEvent[];
-  total: number;
-  page: number;
-  size: number;
-  total_pages: number;
-}
+// Agenda events table may not exist yet
+const MOCK_EVENTS: AgendaEvent[] = [];
 
-export enum EventType {
-  PROJECT_CREATED = 'project_created',
-  PROJECT_START = 'project_start',
-  PROJECT_END = 'project_end',
-  LOCATION_RENTAL_START = 'location_rental_start',
-  LOCATION_RENTAL_END = 'location_rental_end',
-  LOCATION_RENTAL_FULL = 'location_rental_full',
-  VISIT_SCHEDULED = 'visit_scheduled',
-  CONTRACT_SIGNED = 'contract_signed',
-  PAYMENT_DUE = 'payment_due',
-  CUSTOM = 'custom',
-}
-
-export enum EventStatus {
-  SCHEDULED = 'scheduled',
-  IN_PROGRESS = 'in_progress',
-  COMPLETED = 'completed',
-  CANCELLED = 'cancelled',
-  POSTPONED = 'postponed',
-}
-
-class AgendaEventService {
-  async getEvents(
-    filters?: AgendaEventFilter
-  ): Promise<AgendaEventListResponse> {
+export const agendaEventService = {
+  // Method to get filtered events - required by agendaService
+  async getFilteredEvents(
+    filters: AgendaEventFilter = {}
+  ): Promise<AgendaEvent[]> {
     try {
-      const params = new URLSearchParams();
-      if (filters) {
-        Object.entries(filters).forEach(([key, value]) => {
-          if (value !== undefined && value !== null) {
-            params.append(key, value.toString());
-          }
-        });
+      let query = supabase.from('agenda_events').select('*');
+
+      if (filters.startDate) {
+        const start =
+          typeof filters.startDate === 'string'
+            ? filters.startDate
+            : filters.startDate.toISOString().split('T')[0];
+        query = query.gte('start_date', start); // ✅ start_date (REAL)
       }
 
-      const response = await apiService.get<AgendaEventListResponse>(
-        `/agenda-events?${params.toString()}`
+      if (filters.endDate) {
+        const end =
+          typeof filters.endDate === 'string'
+            ? filters.endDate
+            : filters.endDate.toISOString().split('T')[0];
+        query = query.lte('start_date', end); // ✅ start_date (REAL)
+      }
+
+      if (filters.project_id) {
+        query = query.eq('project_id', filters.project_id);
+      }
+
+      if (filters.location_id) {
+        query = query.eq('location_id', filters.location_id);
+      }
+
+      if (filters.user_id) {
+        query = query.eq('user_id', filters.user_id);
+      }
+
+      if (filters.event_type) {
+        query = query.eq('event_type', filters.event_type);
+      }
+
+      if (filters.status) {
+        query = query.eq('status', filters.status);
+      }
+
+      query = query.order('start_date', { ascending: true }); // ✅ start_date (REAL)
+
+      const { data, error } = await query;
+
+      if (error) {
+        console.error('❌ [AGENDA] Erro ao buscar eventos filtrados:', error);
+        return [];
+      }
+
+      console.log(
+        `✅ [AGENDA] ${data?.length || 0} eventos filtrados carregados`
       );
-      return response;
+      return data || [];
     } catch (error) {
-      console.error('Erro ao buscar eventos da agenda:', error);
-      throw error;
+      console.error('❌ [AGENDA] Exception em getFilteredEvents:', error);
+      return [];
     }
-  }
+  },
+
+  async getEvents(): Promise<AgendaEvent[]> {
+    try {
+      console.log('📅 [AGENDA] Buscando todos os eventos...');
+
+      const { data, error } = await supabase
+        .from('agenda_events')
+        .select('*')
+        .order('start_date', { ascending: true }); // ✅ start_date (REAL)
+
+      if (error) {
+        console.error('❌ [AGENDA] Erro ao buscar eventos:', error);
+        return [];
+      }
+
+      console.log(
+        `✅ [AGENDA] ${data?.length || 0} eventos carregados do Supabase`
+      );
+      return data || [];
+    } catch (error) {
+      console.error('❌ [AGENDA] Exception:', error);
+      return [];
+    }
+  },
+
+  async getEvent(id: number): Promise<AgendaEvent | null> {
+    try {
+      const { data, error } = await supabase
+        .from('agenda_events')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (error) return null;
+      return data;
+    } catch (error) {
+      return null;
+    }
+  },
+
+  async createEvent(event: Partial<AgendaEvent>): Promise<AgendaEvent> {
+    const { data, error } = await supabase
+      .from('agenda_events')
+      .insert([event])
+      .select()
+      .single();
+
+    if (error) throw new Error(error.message);
+    return data;
+  },
+
+  async updateEvent(
+    id: number,
+    event: Partial<AgendaEvent>
+  ): Promise<AgendaEvent> {
+    const { data, error } = await supabase
+      .from('agenda_events')
+      .update(event)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw new Error(error.message);
+    return data;
+  },
+
+  async deleteEvent(id: number): Promise<void> {
+    const { error } = await supabase
+      .from('agenda_events')
+      .delete()
+      .eq('id', id);
+    if (error) throw new Error(error.message);
+  },
 
   async getEventsByDateRange(
-    startDate: string,
+    startDate: string, // ✅ String ISO (YYYY-MM-DD)
     endDate: string
   ): Promise<AgendaEvent[]> {
     try {
-      const response = await apiService.get<AgendaEvent[]>(
-        `/agenda-events/date-range?start_date=${startDate}&end_date=${endDate}`
+      console.log(
+        `📅 [AGENDA] Buscando eventos entre ${startDate} e ${endDate}`
       );
-      return response;
-    } catch (error) {
-      console.error('Erro ao buscar eventos por período:', error);
-      throw error;
-    }
-  }
 
-  async getUpcomingEvents(days: number = 7): Promise<AgendaEvent[]> {
+      const { data, error } = await supabase
+        .from('agenda_events')
+        .select('*')
+        .gte('start_date', startDate) // ✅ start_date (REAL)
+        .lte('start_date', endDate) // ✅ start_date (REAL)
+        .order('start_date', { ascending: true });
+
+      if (error) {
+        console.error('❌ [AGENDA] Erro ao buscar por range:', error);
+        return [];
+      }
+
+      console.log(`✅ [AGENDA] ${data?.length || 0} eventos no período`);
+      return data || [];
+    } catch (error) {
+      console.error('❌ [AGENDA] Exception em getEventsByDateRange:', error);
+      return [];
+    }
+  },
+
+  async getEventsByProject(projectId: number): Promise<AgendaEvent[]> {
     try {
-      const response = await apiService.get<AgendaEvent[]>(
-        `/agenda-events/upcoming?days=${days}`
-      );
-      return response;
-    } catch (error) {
-      console.error('Erro ao buscar eventos próximos:', error);
-      throw error;
-    }
-  }
+      const { data, error } = await supabase
+        .from('agenda_events')
+        .select('*')
+        .eq('project_id', projectId);
 
-  async getEventsByType(eventType: EventType): Promise<AgendaEvent[]> {
+      if (error) return [];
+      return data || [];
+    } catch (error) {
+      return [];
+    }
+  },
+
+  async getEventsByUser(userId: number): Promise<AgendaEvent[]> {
     try {
-      const response = await apiService.get<AgendaEvent[]>(
-        `/agenda-events/by-type/${eventType}`
-      );
-      return response;
+      const { data, error } = await supabase
+        .from('agenda_events')
+        .select('*')
+        .eq('user_id', userId);
+
+      if (error) return [];
+      return data || [];
     } catch (error) {
-      console.error('Erro ao buscar eventos por tipo:', error);
-      throw error;
+      return [];
     }
-  }
+  },
+};
 
-  async getEvent(eventId: number): Promise<AgendaEvent> {
-    try {
-      const response = await apiService.get<AgendaEvent>(
-        `/agenda-events/${eventId}`
-      );
-      return response;
-    } catch (error) {
-      console.error('Erro ao buscar evento:', error);
-      throw error;
-    }
-  }
-
-  async createEvent(eventData: AgendaEventCreate): Promise<AgendaEvent> {
-    try {
-      const response = await apiService.post<AgendaEvent>(
-        '/agenda-events',
-        eventData
-      );
-      return response;
-    } catch (error) {
-      console.error('Erro ao criar evento:', error);
-      throw error;
-    }
-  }
-
-  async updateEvent(
-    eventId: number,
-    eventData: AgendaEventUpdate
-  ): Promise<AgendaEvent> {
-    try {
-      const response = await apiService.put<AgendaEvent>(
-        `/agenda-events/${eventId}`,
-        eventData
-      );
-      return response;
-    } catch (error) {
-      console.error('Erro ao atualizar evento:', error);
-      throw error;
-    }
-  }
-
-  async deleteEvent(eventId: number): Promise<void> {
-    try {
-      await apiService.delete(`/agenda-events/${eventId}`);
-    } catch (error) {
-      console.error('Erro ao deletar evento:', error);
-      throw error;
-    }
-  }
-
-  async generateEventsFromProjectLocation(
-    projectLocationId: number
-  ): Promise<{ message: string; events: AgendaEvent[] }> {
-    try {
-      const response = await apiService.post<{
-        message: string;
-        events: AgendaEvent[];
-      }>(`/agenda-events/generate-from-project-location/${projectLocationId}`);
-      return response;
-    } catch (error) {
-      console.error('Erro ao gerar eventos da locação:', error);
-      throw error;
-    }
-  }
-
-  async generateEventsFromProject(
-    projectId: number
-  ): Promise<{ message: string; events: AgendaEvent[] }> {
-    try {
-      const response = await apiService.post<{
-        message: string;
-        events: AgendaEvent[];
-      }>(`/agenda-events/generate-from-project/${projectId}`);
-      return response;
-    } catch (error) {
-      console.error('Erro ao gerar eventos do projeto:', error);
-      throw error;
-    }
-  }
-
-  // Métodos auxiliares para formatação
-  getEventTypeLabel(eventType: EventType): string {
-    const labels: Record<EventType, string> = {
-      [EventType.PROJECT_CREATED]: 'Projeto Criado',
-      [EventType.PROJECT_START]: 'Início do Projeto',
-      [EventType.PROJECT_END]: 'Fim do Projeto',
-      [EventType.LOCATION_RENTAL_START]: 'Início da Locação',
-      [EventType.LOCATION_RENTAL_END]: 'Fim da Locação',
-      [EventType.LOCATION_RENTAL_FULL]: 'Período da Locação',
-      [EventType.VISIT_SCHEDULED]: 'Visita Agendada',
-      [EventType.CONTRACT_SIGNED]: 'Contrato Assinado',
-      [EventType.PAYMENT_DUE]: 'Pagamento Vencido',
-      [EventType.CUSTOM]: 'Evento Personalizado',
-    };
-    return labels[eventType] || eventType;
-  }
-
-  getEventStatusLabel(status: EventStatus): string {
-    const labels: Record<EventStatus, string> = {
-      [EventStatus.SCHEDULED]: 'Agendado',
-      [EventStatus.IN_PROGRESS]: 'Em Andamento',
-      [EventStatus.COMPLETED]: 'Concluído',
-      [EventStatus.CANCELLED]: 'Cancelado',
-      [EventStatus.POSTPONED]: 'Adiado',
-    };
-    return labels[status] || status;
-  }
-
-  getEventTypeColor(eventType: EventType): string {
-    const colors: Record<EventType, string> = {
-      [EventType.PROJECT_CREATED]: '#9C27B0',
-      [EventType.PROJECT_START]: '#4CAF50',
-      [EventType.PROJECT_END]: '#F44336',
-      [EventType.LOCATION_RENTAL_START]: '#4CAF50',
-      [EventType.LOCATION_RENTAL_END]: '#FF9800',
-      [EventType.LOCATION_RENTAL_FULL]: '#2196F3',
-      [EventType.VISIT_SCHEDULED]: '#FF5722',
-      [EventType.CONTRACT_SIGNED]: '#795548',
-      [EventType.PAYMENT_DUE]: '#E91E63',
-      [EventType.CUSTOM]: '#607D8B',
-    };
-    return colors[eventType] || '#607D8B';
-  }
-}
-
-export const agendaEventService = new AgendaEventService();
+export default agendaEventService;

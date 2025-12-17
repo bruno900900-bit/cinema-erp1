@@ -35,7 +35,8 @@ import {
   CheckCircle,
   HourglassEmpty,
 } from '@mui/icons-material';
-import { apiService } from '../../services/api';
+import { projectService } from '../../services/projectService';
+import { supabase } from '../../config/supabaseClient';
 
 interface ProjectReportModalProps {
   open: boolean;
@@ -116,10 +117,90 @@ export default function ProjectReportModal({
     setLoading(true);
     setError(null);
     try {
-      const data = await apiService.get<ReportData>(
-        `/projects/${projectId}/report`
-      );
-      setReport(data);
+      // Note: Report generation traditionally required backend processing.
+      // This implementation fetches data directly from Supabase and constructs the report.
+      const project = await projectService.getProject(String(projectId));
+
+      // Fetch project locations with location details
+      const { data: projectLocations } = await supabase
+        .from('project_locations')
+        .select(
+          `
+          *,
+          location:locations (*)
+        `
+        )
+        .eq('project_id', projectId);
+
+      // Build report data structure
+      const reportData: ReportData = {
+        projeto: {
+          id: project.id,
+          nome: project.name || project.title || '',
+          descricao: project.description || '',
+          cliente: project.client_name || '',
+          cliente_email: project.client_email || '',
+          cliente_telefone: project.client_phone || '',
+          status: project.status || '',
+          data_inicio: project.start_date || '',
+          data_fim: project.end_date || '',
+          orcamento_total: project.budget || 0,
+          orcamento_gasto: project.budget_spent || 0,
+          orcamento_restante:
+            (project.budget || 0) - (project.budget_spent || 0),
+          moeda: 'BRL',
+          criado_em: project.created_at || '',
+        },
+        resumo: {
+          total_locacoes: projectLocations?.length || 0,
+          locacoes_ativas:
+            projectLocations?.filter(
+              l => l.status === 'confirmed' || l.status === 'in_use'
+            ).length || 0,
+          locacoes_concluidas:
+            projectLocations?.filter(l => l.status === 'completed').length || 0,
+          custo_total_locacoes:
+            projectLocations?.reduce(
+              (sum, l) => sum + (l.total_cost || 0),
+              0
+            ) || 0,
+        },
+        locacoes: (projectLocations || []).map((pl: any) => ({
+          id: pl.id,
+          nome: pl.location?.title || 'Sem nome',
+          cidade: pl.location?.city || '',
+          estado: pl.location?.state || '',
+          endereco: pl.location?.address || '',
+          valor_diaria: pl.daily_rate || 0,
+          valor_hora: pl.hourly_rate,
+          valor_total: pl.total_cost || 0,
+          moeda: 'BRL',
+          periodo_locacao: `${pl.rental_start || ''} - ${pl.rental_end || ''}`,
+          data_inicio: pl.rental_start || '',
+          data_fim: pl.rental_end || '',
+          duracao_dias:
+            pl.rental_start && pl.rental_end
+              ? Math.ceil(
+                  (new Date(pl.rental_end).getTime() -
+                    new Date(pl.rental_start).getTime()) /
+                    (1000 * 60 * 60 * 24)
+                ) + 1
+              : 0,
+          data_visita: '',
+          data_visita_tecnica: '',
+          periodo_filmagem: '',
+          data_entrega: '',
+          status: pl.status || 'pending',
+          progresso:
+            pl.status === 'completed' ? 100 : pl.status === 'in_use' ? 50 : 0,
+          observacoes: pl.notes || '',
+          requisitos_especiais: '',
+          equipamentos: '',
+        })),
+        gerado_em: new Date().toLocaleString('pt-BR'),
+      };
+
+      setReport(reportData);
     } catch (err: any) {
       setError(err.message || 'Erro ao carregar relatório');
     } finally {

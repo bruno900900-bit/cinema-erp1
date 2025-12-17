@@ -1,16 +1,14 @@
-import { apiService } from './api';
+import { supabase } from '../config/supabaseClient';
 
 export interface PhotoUploadResponse {
   message: string;
   location_id: string;
   uploaded_photos: {
+    id: number;
     filename: string;
-    original_filename?: string;
     url: string;
-    size: number;
+    size?: number;
     uploaded_at: string;
-    storage?: { bucket: string | null; path: string };
-    storage_key?: string;
   }[];
   total_photos: number;
 }
@@ -18,168 +16,183 @@ export interface PhotoUploadResponse {
 export interface PhotoListResponse {
   location_id: string;
   photos: {
+    id: number;
     url: string;
-    filename: string;
+    filename?: string;
     exists: boolean;
+    thumbnail_url?: string;
+    is_primary?: boolean;
+    caption?: string;
   }[];
   total: number;
 }
 
 /**
- * Serviço unificado para upload de fotos
- * Usa o endpoint de photos do backend com storage no Supabase
+ * Serviço unificado para upload de fotos - Migrado para Supabase
  */
 export const photoUploadService = {
   /**
-   * Faz upload de fotos para uma locação
-   * @param locationId ID da locação
-   * @param files Array de arquivos a serem enviados
-   * @returns Promise com resposta do upload
+   * Faz upload de fotos para uma locação via Supabase Storage
    */
   async uploadPhotos(
     locationId: string | number,
     files: File[]
   ): Promise<PhotoUploadResponse> {
     try {
-      const formData = new FormData();
+      const uploadedPhotos: any[] = [];
 
-      // Adicionar cada arquivo ao FormData
-      files.forEach(file => {
-        formData.append('photo', file); // Backend expects 'photo' (singular) for single upload or maybe loop?
-        // Wait, locations.py `upload_location_photo` takes `photo: UploadFile`. SINGLE FILE.
-        // `create_location_with_photos` takes `photos: List[UploadFile]`.
-        // There is NO bulk upload endpoint for existing location in `locations.py`!
-        // Line 264: `def upload_location_photo(...) photo: UploadFile = File(...)`. ONE FILE.
-        // The service needs to loop or backend needs update.
-      });
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${locationId}/${Date.now()}_${i}.${fileExt}`;
 
-      // Let's implement LOOP in frontend for now to match backend signature `upload_location_photo`.
-      // Or better, create a new backend endpoint for BULK upload.
-      // But user said "Conserte".
-      // Let's modify `uploadPhotos` to run parallel requests or sequential.
+        // 1. Upload to Supabase Storage
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('location-photos')
+          .upload(fileName, file, {
+            cacheControl: '3600',
+            upsert: false,
+          });
 
-      const uploadPromises = files.map(file => {
-        const fd = new FormData();
-        fd.append('photo', file);
-        return apiService.post<any>(
-          `/locations/${encodeURIComponent(locationId.toString())}/photos`,
-          fd,
-          { headers: { 'Content-Type': 'multipart/form-data' } }
-        );
-      });
+        if (uploadError) {
+          console.error('Erro no upload storage:', uploadError);
+          continue;
+        }
 
-      await Promise.all(uploadPromises);
+        // 2. Get public URL
+        const {
+          data: { publicUrl },
+        } = supabase.storage.from('location-photos').getPublicUrl(fileName);
 
-      // Return dummy response or fetch list
+        // 3. Save to location_photos table
+        const { data: photoRecord, error: dbError } = await supabase
+          .from('location_photos')
+          .insert([
+            {
+              location_id: Number(locationId),
+              url: publicUrl,
+              caption: '',
+              is_primary: i === 0,
+              display_order: i,
+              // Note: filename, original_filename, file_path don't exist in table schema
+            },
+          ])
+          .select()
+          .single();
+
+        if (dbError) {
+          console.error('Erro ao salvar registro de foto:', dbError);
+        } else {
+          uploadedPhotos.push({
+            id: photoRecord.id,
+            filename: fileName,
+            url: publicUrl,
+            uploaded_at: new Date().toISOString(),
+          });
+        }
+      }
+
       return {
         message: 'Upload concluído',
         location_id: locationId.toString(),
-        uploaded_photos: [], // We'd need to gather results
-        total_photos: files.length,
+        uploaded_photos: uploadedPhotos,
+        total_photos: uploadedPhotos.length,
       };
     } catch (error: any) {
       console.error('Erro no upload de fotos:', error);
-      throw new Error(
-        error.response?.data?.detail ||
-          error.message ||
-          'Erro desconhecido no upload de fotos'
-      );
+      throw new Error(error.message || 'Erro desconhecido no upload de fotos');
     }
   },
 
   /**
-   * Lista fotos de uma locação
-   * @param locationId ID da locação
-   * @returns Promise com lista de fotos
+   * Lista fotos de uma locação via Supabase
    */
   async listPhotos(locationId: string | number): Promise<PhotoListResponse> {
     try {
-      const response = await apiService.get<any[]>(
-        `/locations/${encodeURIComponent(locationId.toString())}/photos`
-      );
-      // Map backend response to frontend interface
+      const { data, error } = await supabase
+        .from('location_photos')
+        .select('*')
+        .eq('location_id', Number(locationId))
+        .order('display_order', { ascending: true });
+
+      if (error) throw error;
+
       return {
         location_id: locationId.toString(),
-        photos: response.map((p: any) => ({
+        photos: (data || []).map((p: any) => ({
           id: p.id,
           url: p.url,
-          filename: p.filename,
-          original_filename: p.original_filename,
+          filename: p.url?.split('/').pop() || '',
           exists: true,
           thumbnail_url: p.thumbnail_url,
           is_primary: p.is_primary || false,
           caption: p.caption || '',
-          file_size: p.file_size,
-          created_at: p.created_at,
         })),
-        total: response.length,
+        total: data?.length || 0,
       };
     } catch (error: any) {
       console.error('Erro ao listar fotos:', error);
-      throw new Error(
-        error.response?.data?.detail || error.message || 'Erro ao listar fotos'
-      );
+      throw new Error(error.message || 'Erro ao listar fotos');
     }
   },
 
   /**
    * Remove uma foto específica
-   * @param locationId ID da locação
-   * @param photoId ID da foto (backend needs ID now)
-   * @returns Promise com resultado da operação
    */
   async deletePhoto(
     locationId: string | number,
-    photoId: string | number // Changed from filename
+    photoId: string | number
   ): Promise<any> {
     try {
-      const response = await apiService.delete(
-        `/locations/${encodeURIComponent(
-          locationId.toString()
-        )}/photos/${encodeURIComponent(photoId.toString())}`
-      );
-      return response;
+      // Get photo URL first to delete from storage too
+      const { data: photo } = await supabase
+        .from('location_photos')
+        .select('url')
+        .eq('id', Number(photoId))
+        .single();
+
+      // Delete from database
+      const { error } = await supabase
+        .from('location_photos')
+        .delete()
+        .eq('id', Number(photoId));
+
+      if (error) throw error;
+
+      // Optionally delete from storage (extract path from URL)
+      // This is complex because we need to extract the path from the public URL
+      // Skipping for now - storage cleanup can be done separately
+
+      return { success: true };
     } catch (error: any) {
       console.error('Erro ao deletar foto:', error);
-      throw new Error(
-        error.response?.data?.detail || error.message || 'Erro ao deletar foto'
-      );
+      throw new Error(error.message || 'Erro ao deletar foto');
     }
   },
 
   /**
    * Gera URL para visualizar uma foto
-   * @param locationId ID da locação
-   * @param filename Nome do arquivo
-   * @returns URL da foto (via proxy do backend)
    */
   getPhotoUrl(locationId: string | number, filename: string): string {
-    // Se filename já for URL completa (Supabase)
     if (filename.startsWith('http')) return filename;
 
-    // Fallback para local
-    const isProduction =
-      window.location.hostname !== 'localhost' &&
-      window.location.hostname !== '127.0.0.1';
+    // Build Supabase Storage URL
+    const {
+      data: { publicUrl },
+    } = supabase.storage
+      .from('location-photos')
+      .getPublicUrl(`${locationId}/${filename}`);
 
-    const baseURL = isProduction
-      ? '' // Relative path in production usually works if served from same origin
-      : 'http://localhost:8020';
-
-    return `${baseURL}/uploads/locations/${locationId}/${filename}`;
+    return publicUrl;
   },
 
   /**
    * Valida arquivos antes do upload
-   * @param files Array de arquivos
-   * @param maxFiles Número máximo de arquivos
-   * @param maxSizePerFile Tamanho máximo por arquivo em bytes
-   * @returns Objeto com resultado da validação
    */
   validateFiles(
     files: File[],
     maxFiles: number = 10,
-    maxSizePerFile: number = 10 * 1024 * 1024 // 10MB
+    maxSizePerFile: number = 10 * 1024 * 1024
   ): { valid: boolean; errors: string[] } {
     const errors: string[] = [];
     const allowedTypes = [
@@ -190,45 +203,27 @@ export const photoUploadService = {
       'image/gif',
     ];
 
-    // Verificar número de arquivos
     if (files.length > maxFiles) {
       errors.push(`Máximo de ${maxFiles} arquivos permitidos`);
     }
 
-    // Verificar cada arquivo
     files.forEach((file, index) => {
-      // Verificar tipo
       if (!allowedTypes.includes(file.type.toLowerCase())) {
         errors.push(
           `Arquivo ${index + 1}: Tipo não permitido. Use JPG, PNG, WebP ou GIF`
         );
       }
-
-      // Verificar tamanho
       if (file.size > maxSizePerFile) {
         const maxSizeMB = Math.round(maxSizePerFile / (1024 * 1024));
         errors.push(
           `Arquivo ${index + 1}: Muito grande. Máximo ${maxSizeMB}MB`
         );
       }
-
-      // Verificar se o arquivo tem nome
-      if (!file.name || file.name.trim() === '') {
-        errors.push(`Arquivo ${index + 1}: Nome inválido`);
-      }
     });
 
-    return {
-      valid: errors.length === 0,
-      errors,
-    };
+    return { valid: errors.length === 0, errors };
   },
 
-  /**
-   * Formata tamanho de arquivo para exibição
-   * @param bytes Tamanho em bytes
-   * @returns String formatada (ex: "2.5 MB")
-   */
   formatFileSize(bytes: number): string {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;

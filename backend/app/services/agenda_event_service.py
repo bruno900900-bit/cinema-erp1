@@ -35,9 +35,9 @@ class AgendaEventService:
 
         if filters:
             if filters.start_date:
-                query = query.filter(AgendaEvent.event_date >= filters.start_date)
+                query = query.filter(AgendaEvent.start_date >= filters.start_date)
             if filters.end_date:
-                query = query.filter(AgendaEvent.event_date <= filters.end_date)
+                query = query.filter(AgendaEvent.start_date <= filters.end_date)
             if filters.event_type:
                 query = query.filter(AgendaEvent.event_type == filters.event_type)
             if filters.status:
@@ -59,10 +59,10 @@ class AgendaEventService:
         """Buscar eventos por período"""
         return self.db.query(AgendaEvent).filter(
             and_(
-                AgendaEvent.event_date >= start_date,
-                AgendaEvent.event_date <= end_date
+                AgendaEvent.start_date >= start_date.isoformat() if isinstance(start_date, date) else start_date,
+                AgendaEvent.start_date <= end_date.isoformat() if isinstance(end_date, date) else end_date
             )
-        ).order_by(AgendaEvent.event_date, AgendaEvent.start_time).all()
+        ).order_by(AgendaEvent.start_date).all()
 
     def update_event(self, event_id: int, event_data: AgendaEventUpdate) -> Optional[AgendaEvent]:
         """Atualizar evento"""
@@ -170,14 +170,14 @@ class AgendaEventService:
 
         return self.db.query(AgendaEvent).filter(
             and_(
-                AgendaEvent.event_date >= today,
-                AgendaEvent.event_date <= end_date,
+                AgendaEvent.start_date >= today.isoformat(),
+                AgendaEvent.start_date <= end_date.isoformat(),
                 AgendaEvent.status != EventStatus.CANCELLED
             )
-        ).order_by(AgendaEvent.event_date, AgendaEvent.start_time).all()
+        ).order_by(AgendaEvent.start_date).all()
 
     def get_events_by_type(self, event_type: EventType) -> List[AgendaEvent]:
         """Buscar eventos por tipo"""
         return self.db.query(AgendaEvent).filter(
             AgendaEvent.event_type == event_type
-        ).order_by(AgendaEvent.event_date).all()
+        ).order_by(AgendaEvent.start_date).all()

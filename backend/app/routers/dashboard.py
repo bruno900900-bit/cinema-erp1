@@ -58,8 +58,8 @@ def get_dashboard_stats(
     next_week = today + timedelta(days=7)
     upcoming_events = db.query(func.count(AgendaEvent.id)).filter(
         and_(
-            AgendaEvent.event_date >= today,
-            AgendaEvent.event_date <= next_week
+            AgendaEvent.start_date >= today.isoformat(),
+            AgendaEvent.start_date <= next_week.isoformat()
         )
     ).scalar() or 0
 
@@ -127,10 +127,10 @@ def get_upcoming_events(
 
     events = db.query(AgendaEvent).filter(
         and_(
-            AgendaEvent.event_date >= today,
-            AgendaEvent.event_date <= next_month
+            AgendaEvent.start_date >= today.isoformat(),
+            AgendaEvent.start_date <= next_month.isoformat()
         )
-    ).order_by(AgendaEvent.event_date.asc()).limit(limit).all()
+    ).order_by(AgendaEvent.start_date.asc()).limit(limit).all()
 
     result = []
     for e in events:
@@ -140,10 +140,9 @@ def get_upcoming_events(
             "description": e.description,
             "event_type": e.event_type.value if e.event_type else None,
             "status": e.status.value if e.status else None,
-            "event_date": e.event_date.isoformat() if e.event_date else None,
-            "start_time": e.start_time,
-            "end_time": e.end_time,
-            "is_all_day": e.is_all_day,
+            "start_date": e.start_date,
+            "end_date": e.end_date,
+            "all_day": e.all_day,
             "color": e.color,
             "priority": e.priority,
         })

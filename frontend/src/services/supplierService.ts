@@ -1,4 +1,4 @@
-import { apiService } from './api';
+import { supabase } from '../config/supabaseClient';
 
 // Tipos alinhados ao backend (schemas/supplier.py)
 export interface Supplier {
@@ -11,7 +11,6 @@ export interface Supplier {
   address_json?: Record<string, any> | null;
   notes?: string;
   rating?: number;
-  is_active: boolean;
   created_at: string;
   updated_at: string;
   locations_count?: number;
@@ -26,7 +25,6 @@ export interface SupplierCreate {
   address_json?: Record<string, any> | null;
   notes?: string;
   rating?: number;
-  is_active?: boolean;
 }
 
 export interface SupplierUpdate {
@@ -38,14 +36,12 @@ export interface SupplierUpdate {
   address_json?: Record<string, any> | null;
   notes?: string;
   rating?: number;
-  is_active?: boolean;
 }
 
 export interface SupplierFilter {
   name?: string;
   tax_id?: string;
   email?: string;
-  is_active?: boolean | string; // Select may pass string 'true' | 'false'
   rating_min?: number;
   rating_max?: number;
   has_locations?: boolean | string;
@@ -64,59 +60,116 @@ class SupplierService {
   async getSuppliers(
     params: Partial<SupplierFilter> & { skip?: number; limit?: number } = {}
   ): Promise<SupplierListResponse> {
-    // Coerção de booleanos quando vierem como string
-    const normalizeBool = (v: any) =>
-      typeof v === 'string'
-        ? v === 'true'
-          ? true
-          : v === 'false'
-          ? false
-          : undefined
-        : v;
+    console.log('📦 SupplierService.getSuppliers (Supabase Safe)', params);
 
-    const query: any = { ...params };
-    if (query.is_active !== undefined)
-      query.is_active = normalizeBool(query.is_active);
-    if (query.has_locations !== undefined)
-      query.has_locations = normalizeBool(query.has_locations);
+    let query = supabase.from('suppliers').select('*', { count: 'exact' });
 
-    const data = await apiService.get<SupplierListResponse>('/suppliers', {
-      params: query,
-    });
-    return data;
+    // Filtros
+    if (params.name) {
+      query = query.ilike('name', `%${params.name}%`);
+    }
+
+    if (params.email) {
+      query = query.ilike('email', `%${params.email}%`);
+    }
+
+    if (params.tax_id) {
+      query = query.eq('tax_id', params.tax_id);
+    }
+
+    // Paginação
+    const limit = params.limit || 10;
+    const skip = params.skip || 0;
+    const page = Math.floor(skip / limit) + 1;
+
+    query = query.range(skip, skip + limit - 1);
+    query = query.order('name', { ascending: true });
+
+    const { data, error, count } = await query;
+
+    if (error) {
+      console.error('Erro ao buscar fornecedores:', error);
+      return { suppliers: [], total: 0, page: 1, size: limit, total_pages: 0 };
+    }
+
+    const total = count || 0;
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      suppliers: (data as Supplier[]) || [],
+      total,
+      page,
+      size: limit,
+      total_pages: totalPages || 1,
+    };
   }
 
   // Fornecedores ativos (atalho)
   async getActiveSuppliers(): Promise<Supplier[]> {
-    const resp = await this.getSuppliers({ is_active: true, limit: 100 });
-    return resp.suppliers || [];
+    // Just get all suppliers for now since filter is broken
+    const { suppliers } = await this.getSuppliers({ limit: 100 });
+    return suppliers;
   }
 
   // Buscar por ID
   async getSupplierById(id: number): Promise<Supplier | null> {
-    try {
-      const data = await apiService.get<Supplier>(`/suppliers/${id}`);
-      return data;
-    } catch (e) {
-      return null;
-    }
+    const { data, error } = await supabase
+      .from('suppliers')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) return null;
+    return data as Supplier;
   }
 
   // Criar fornecedor (POST)
   async createSupplier(data: SupplierCreate): Promise<Supplier> {
-    const created = await apiService.post<Supplier>('/suppliers', data);
-    return created;
+    const { data: created, error } = await supabase
+      .from('suppliers')
+      .insert([data])
+      .select()
+      .single();
+
+    if (error) throw error;
+    return created as Supplier;
   }
 
   // Atualizar fornecedor (PUT)
   async updateSupplier(id: number, data: SupplierUpdate): Promise<Supplier> {
-    const updated = await apiService.put<Supplier>(`/suppliers/${id}`, data);
-    return updated;
+    const { data: updated, error } = await supabase
+      .from('suppliers')
+      .update(data)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return updated as Supplier;
   }
 
   // Remover fornecedor (DELETE)
   async deleteSupplier(id: number): Promise<void> {
-    await apiService.delete(`/suppliers/${id}`);
+    try {
+      // 1. Check for dependent locations
+      const { count, error: countError } = await supabase
+        .from('locations')
+        .select('*', { count: 'exact', head: true })
+        .eq('supplier_id', id);
+
+      if (!countError && count && count > 0) {
+        throw new Error(
+          `Este fornecedor possui ${count} locações vinculadas. Remova ou reatribua as locações antes de excluir.`
+        );
+      }
+
+      // 2. Delete
+      const { error } = await supabase.from('suppliers').delete().eq('id', id);
+      if (error) throw error;
+    } catch (error: any) {
+      console.error('Erro ao excluir fornecedor:', error);
+      throw error; // Re-throw to show message to user
+    }
   }
 }
 

@@ -120,7 +120,7 @@ class ProjectLocationStageFilter(BaseModel):
             return [StageStatus(x.strip()) for x in v.split(',')]
         return v
 
-class ProjectLocationStagesSummary(BaseModel):
+class Project LocationStagesSummary(BaseModel):
     """Resumo das etapas de locações em um projeto"""
     project_id: int
     total_stages: int
@@ -133,3 +133,25 @@ class ProjectLocationStagesSummary(BaseModel):
     stages_by_type: Dict[str, int]
     critical_stages_count: int
     milestones_count: int
+
+class StageStatusUpdate(BaseModel):
+    """Schema para atualização de status de uma etapa"""
+    status: StageStatus
+    notes: Optional[str] = Field(None, max_length=1000)
+
+class StageHistoryResponse(BaseModel):
+    """Schema para resposta de histórico de mudanças"""
+    id: int
+    stage_id: int
+    previous_status: Optional[StageStatus] = None
+    new_status: StageStatus
+    previous_completion: Optional[float] = None
+    new_completion: float
+    changed_by_user_id: int
+    changed_by: UserResponse
+    change_notes: Optional[str] = None
+    changed_at: datetime
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

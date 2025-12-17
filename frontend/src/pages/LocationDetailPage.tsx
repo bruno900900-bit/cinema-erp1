@@ -29,10 +29,12 @@ import {
   Photo,
   Delete as DeleteIcon,
 } from '@mui/icons-material';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { locationService } from '../services/locationService';
 import LoadingSpinner from '../components/Common/LoadingSpinner';
+import PhotoGalleryLightbox from '../components/Locations/PhotoGalleryLightbox';
 import { Location, SectorType } from '../types/user';
+import { toast } from 'react-toastify';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -57,7 +59,10 @@ function TabPanel(props: TabPanelProps) {
 export default function LocationDetailPage() {
   const { locationId } = useParams<{ locationId: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [currentTab, setCurrentTab] = useState(0);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
 
   const { data: location, isLoading } = useQuery<Location>({
     queryKey: ['location', locationId],
@@ -380,32 +385,130 @@ export default function LocationDetailPage() {
               sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}
             >
               <Typography variant="h6">Galeria de Fotos</Typography>
-              <Button variant="contained" startIcon={<Photo />}>
+              <Button
+                variant="contained"
+                startIcon={<Photo />}
+                onClick={() => navigate(`/locations/${locationId}/edit`)}
+              >
                 Upload de Fotos
               </Button>
             </Box>
 
             {location.photos && location.photos.length > 0 ? (
-              <ImageList cols={3} gap={16}>
-                {location.photos.map(photo => (
-                  <ImageListItem key={photo.id}>
-                    <img
-                      src={photo.url}
-                      alt={photo.caption || location.title}
-                      loading="lazy"
-                      style={{ height: 200, objectFit: 'cover' }}
-                    />
-                    <ImageListItemBar
-                      title={photo.caption}
-                      actionIcon={
-                        <IconButton sx={{ color: 'white' }}>
-                          <DeleteIcon />
-                        </IconButton>
-                      }
-                    />
-                  </ImageListItem>
-                ))}
-              </ImageList>
+              <>
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns:
+                      'repeat(auto-fill, minmax(250px, 1fr))',
+                    gap: 2,
+                  }}
+                >
+                  {location.photos.map((photo: any, index: number) => (
+                    <Card
+                      key={photo.id}
+                      sx={{
+                        borderRadius: 3,
+                        overflow: 'hidden',
+                        cursor: 'pointer',
+                        transition: 'all 0.3s ease',
+                        border: photo.is_primary ? '3px solid' : '1px solid',
+                        borderColor: photo.is_primary
+                          ? 'primary.main'
+                          : 'divider',
+                        '&:hover': {
+                          transform: 'translateY(-8px)',
+                          boxShadow: 8,
+                        },
+                      }}
+                      onClick={() => {
+                        setSelectedPhotoIndex(index);
+                        setLightboxOpen(true);
+                      }}
+                    >
+                      <Box sx={{ position: 'relative', paddingTop: '75%' }}>
+                        {photo.is_primary && (
+                          <Box
+                            sx={{
+                              position: 'absolute',
+                              top: 12,
+                              right: 12,
+                              bgcolor: 'primary.main',
+                              color: 'white',
+                              borderRadius: '50%',
+                              p: 0.75,
+                              zIndex: 1,
+                              boxShadow: 2,
+                            }}
+                          >
+                            <IconButton
+                              size="small"
+                              sx={{ p: 0, color: 'white' }}
+                            >
+                              <Photo sx={{ fontSize: 20 }} />
+                            </IconButton>
+                          </Box>
+                        )}
+                        <Box
+                          component="img"
+                          src={
+                            photo.thumbnail_url || photo.url || photo.file_path
+                          }
+                          alt={photo.caption || location.title}
+                          loading="lazy"
+                          onError={e => {
+                            const target = e.target as HTMLImageElement;
+                            if (
+                              photo.file_path &&
+                              !target.src.includes(photo.file_path)
+                            ) {
+                              target.src = `https://rwpmtuohcvnciemtsjge.supabase.co/storage/v1/object/public/location-photos/${photo.file_path}`;
+                            } else if (!target.src.includes('placeholder')) {
+                              target.src =
+                                'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="300" height="225"%3E%3Crect fill="%23f0f0f0" width="300" height="225"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" fill="%23999" font-size="14"%3EImagem não disponível%3C/text%3E%3C/svg%3E';
+                            }
+                          }}
+                          sx={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
+                          }}
+                        />
+                      </Box>
+                      {photo.caption && (
+                        <Box sx={{ p: 2, bgcolor: 'background.paper' }}>
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            noWrap
+                          >
+                            {photo.caption}
+                          </Typography>
+                        </Box>
+                      )}
+                    </Card>
+                  ))}
+                </Box>
+
+                {/* Lightbox */}
+                <PhotoGalleryLightbox
+                  photos={location.photos.map((p: any) => ({
+                    id: p.id,
+                    url: p.url || p.file_path,
+                    thumbnail_url: p.thumbnail_url,
+                    caption: p.caption,
+                    is_primary: p.is_primary,
+                    original_filename: p.original_filename || p.filename,
+                  }))}
+                  initialIndex={selectedPhotoIndex}
+                  open={lightboxOpen}
+                  onClose={() => setLightboxOpen(false)}
+                  canEdit={false}
+                />
+              </>
             ) : (
               <Paper sx={{ p: 4, textAlign: 'center', bgcolor: 'grey.50' }}>
                 <Photo sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />

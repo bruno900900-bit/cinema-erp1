@@ -10,6 +10,7 @@ from ....schemas.project_location import (
     ProjectLocationTimeline
 )
 from ....services.project_location_service import ProjectLocationService
+from ....services.project_location_calendar_service import project_location_calendar_service
 from ....core.database import get_db
 
 router = APIRouter(prefix="/project-locations", tags=["project-locations"])
@@ -25,6 +26,15 @@ def create_project_location(
         print(f"DEBUG: Received create_project_location request. Data: {location_data}")
         location_service = ProjectLocationService(db)
         project_location = location_service.create_project_location(location_data)
+
+        # Criar eventos do calendário automaticamente
+        try:
+            created_events = project_location_calendar_service.create_all_events(db, project_location)
+            print(f"✅ Created {len(created_events)} calendar events for project_location {project_location.id}")
+        except Exception as calendar_error:
+            print(f"⚠️ Warning: Failed to create calendar events: {calendar_error}")
+            # Não falhar a requisição se criação de eventos falhar
+
         return project_location
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -121,11 +131,26 @@ def update_project_location(
     if not project_location:
         raise HTTPException(status_code=404, detail="Locação de projeto não encontrada")
 
+    # Atualizar eventos do calendário
+    try:
+        updated_events = project_location_calendar_service.update_events(db, project_location)
+        print(f"✅ Updated {len(updated_events)} calendar events for project_location {project_location.id}")
+    except Exception as calendar_error:
+        print(f"⚠️ Warning: Failed to update calendar events: {calendar_error}")
+        # Não falhar a requisição se atualização de eventos falhar
+
     return project_location
 
 @router.delete("/{location_id}")
 def delete_project_location(location_id: int, db: Session = Depends(get_db)):
     """Remove uma locação de projeto"""
+    # Deletar eventos do calendário vinculados
+    try:
+        deleted_events = project_location_calendar_service.delete_events(db, location_id)
+        print(f"✅ Deleted {deleted_events} calendar events for project_location {location_id}")
+    except Exception as calendar_error:
+        print(f"⚠️ Warning: Failed to delete calendar events: {calendar_error}")
+
     location_service = ProjectLocationService(db)
     success = location_service.delete_project_location(location_id)
 

@@ -96,6 +96,10 @@ export default function ProjectStagesCalendar({
         date_to: validEndDate.toISOString().split('T')[0],
       });
 
+      if (!Array.isArray(stages) || stages.length === 0) {
+        setEvents([]);
+        return;
+      }
       const calendarEvents: CalendarEvent[] = [];
 
       stages.forEach(stage => {

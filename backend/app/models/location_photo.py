@@ -9,9 +9,10 @@ class LocationPhoto(Base, TimestampMixin):
     location_id = Column(Integer, ForeignKey("locations.id"), nullable=False)
 
     # Campos para armazenamento local
-    filename = Column(String(255), nullable=False)  # Nome do arquivo
-    original_filename = Column(String(255), nullable=False)  # Nome original
-    file_path = Column(String(500), nullable=False)  # Caminho do arquivo
+    # Campos para armazenamento local
+    filename = Column(String(255), nullable=True)  # Nome do arquivo (agora opcional)
+    original_filename = Column(String(255), nullable=True)  # Nome original (agora opcional)
+    file_path = Column(String(500), nullable=True)  # Caminho do arquivo (agora opcional)
     thumbnail_path = Column(String(500), nullable=True)  # Caminho da miniatura
 
     # Campos para armazenamento em nuvem (futuro)

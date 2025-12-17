@@ -20,6 +20,7 @@ class User(Base, TimestampMixin):
     email = Column(String(255), unique=True, index=True, nullable=False)
     full_name = Column(String(255), nullable=False)
     password_hash = Column(String(255), nullable=False)
+    auth_id = Column(String(36), nullable=True, unique=True)  # Link to Supabase Auth UUID
 
     # RBAC
     role = Column(Enum(UserRole), default=UserRole.CONTRIBUTOR)

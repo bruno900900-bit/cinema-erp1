@@ -72,9 +72,18 @@ def get_api_key_dependency(request: Request):
 # Configurar CORS - DEVE ser adicionado ANTES de outros middlewares
 # Nota: quando allow_credentials=True, não é permitido usar "*" em allow_origins.
 # Portanto, liste explicitamente as origens permitidas (produção + desenvolvimento).
+import os
+
+# Read allowed origins for CORS from environment (comma-separated). If not set, default to allow all.
+allowed_origins_env = os.getenv("SUPABASE_ALLOWED_ORIGINS")
+if allowed_origins_env:
+    allowed_origins = [origin.strip() for origin in allowed_origins_env.split(",") if origin.strip()]
+else:
+    allowed_origins = ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],  # Todos os métodos incluindo OPTIONS
     allow_headers=["*"],  # Todos os headers
