@@ -75,7 +75,6 @@ const SupplierManager: React.FC<SupplierManagerProps> = ({
     website: '',
     notes: '',
     rating: undefined,
-    is_active: true,
   });
 
   const queryClient = useQueryClient();
@@ -104,15 +103,29 @@ const SupplierManager: React.FC<SupplierManagerProps> = ({
   // Mutations
   const createMutation = useMutation({
     mutationFn: supplierService.createSupplier,
-    onSuccess: supplier => {
-      queryClient.invalidateQueries({ queryKey: ['suppliers'] });
-      queryClient.invalidateQueries({ queryKey: ['suppliers', 'locations-tab'] });
-  queryClient.invalidateQueries({ queryKey: ['activeSuppliers'] });
+    onSuccess: async supplier => {
+      console.log('✅ Supplier created successfully:', supplier);
+      console.log('🔄 Invalidating and refetching supplier queries...');
+      await queryClient.invalidateQueries({
+        queryKey: ['suppliers'],
+        refetchType: 'active',
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ['suppliers', 'locations-tab'],
+        refetchType: 'active',
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ['activeSuppliers'],
+        refetchType: 'active',
+      });
+      await queryClient.refetchQueries({ queryKey: ['suppliers'] });
+      await queryClient.refetchQueries({ queryKey: ['activeSuppliers'] });
+      console.log('✅ Refetch complete');
       onSupplierCreated?.(supplier);
       handleClose();
     },
     onError: (error: any) => {
-      console.error('Erro ao criar fornecedor:', error);
+      console.error('❌ Erro ao criar fornecedor:', error);
       const detail =
         error?.response?.data?.detail ||
         error?.message ||
@@ -124,14 +137,28 @@ const SupplierManager: React.FC<SupplierManagerProps> = ({
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: SupplierUpdate }) =>
       supplierService.updateSupplier(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['suppliers'] });
-      queryClient.invalidateQueries({ queryKey: ['suppliers', 'locations-tab'] });
-      queryClient.invalidateQueries({ queryKey: ['activeSuppliers'] });
+    onSuccess: async () => {
+      console.log('✅ Supplier updated successfully');
+      console.log('🔄 Invalidating and refetching supplier queries...');
+      await queryClient.invalidateQueries({
+        queryKey: ['suppliers'],
+        refetchType: 'active',
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ['suppliers', 'locations-tab'],
+        refetchType: 'active',
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ['activeSuppliers'],
+        refetchType: 'active',
+      });
+      await queryClient.refetchQueries({ queryKey: ['suppliers'] });
+      await queryClient.refetchQueries({ queryKey: ['activeSuppliers'] });
+      console.log('✅ Refetch complete');
       handleClose();
     },
     onError: (error: any) => {
-      console.error('Erro ao atualizar fornecedor:', error);
+      console.error('❌ Erro ao atualizar fornecedor:', error);
       const detail =
         error?.response?.data?.detail ||
         error?.message ||
@@ -142,9 +169,20 @@ const SupplierManager: React.FC<SupplierManagerProps> = ({
 
   const deleteMutation = useMutation({
     mutationFn: supplierService.deleteSupplier,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['suppliers'] });
-      queryClient.invalidateQueries({ queryKey: ['activeSuppliers'] });
+    onSuccess: async () => {
+      console.log('✅ Supplier deleted successfully');
+      console.log('🔄 Invalidating and refetching supplier queries...');
+      await queryClient.invalidateQueries({
+        queryKey: ['suppliers'],
+        refetchType: 'active',
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ['activeSuppliers'],
+        refetchType: 'active',
+      });
+      await queryClient.refetchQueries({ queryKey: ['suppliers'] });
+      await queryClient.refetchQueries({ queryKey: ['activeSuppliers'] });
+      console.log('✅ Refetch complete');
     },
   });
 
@@ -160,7 +198,6 @@ const SupplierManager: React.FC<SupplierManagerProps> = ({
         website: supplier.website || '',
         notes: supplier.notes || '',
         rating: supplier.rating,
-        is_active: supplier.is_active,
       });
     } else {
       setEditingSupplier(null);
@@ -172,7 +209,6 @@ const SupplierManager: React.FC<SupplierManagerProps> = ({
         website: '',
         notes: '',
         rating: undefined,
-        is_active: true,
       });
     }
     setOpen(true);
@@ -190,7 +226,6 @@ const SupplierManager: React.FC<SupplierManagerProps> = ({
       website: '',
       notes: '',
       rating: undefined,
-      is_active: true,
     });
   };
 
@@ -285,26 +320,7 @@ const SupplierManager: React.FC<SupplierManagerProps> = ({
               }}
             />
           </Grid>
-          <Grid item xs={12} md={2}>
-            <FormControl fullWidth>
-              <InputLabel>Status</InputLabel>
-              <Select
-                value={filters.is_active ?? ''}
-                onChange={e =>
-                  handleFilterChange(
-                    'is_active',
-                    e.target.value === '' ? undefined : e.target.value
-                  )
-                }
-                label="Status"
-              >
-                <MenuItem value="">Todos</MenuItem>
-                <MenuItem value="true">Ativo</MenuItem>
-                <MenuItem value="false">Inativo</MenuItem>
-              </Select>
-            </FormControl>
-          </Grid>
-          <Grid item xs={12} md={2}>
+          <Grid item xs={12} md={3}>
             <FormControl fullWidth>
               <InputLabel>Com Locações</InputLabel>
               <Select
@@ -341,20 +357,19 @@ const SupplierManager: React.FC<SupplierManagerProps> = ({
               <TableCell>Contato</TableCell>
               <TableCell>Avaliação</TableCell>
               <TableCell>Locações</TableCell>
-              <TableCell>Status</TableCell>
               <TableCell>Ações</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={7} align="center">
+                <TableCell colSpan={6} align="center">
                   Carregando...
                 </TableCell>
               </TableRow>
             ) : filteredSuppliers.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} align="center">
+                <TableCell colSpan={6} align="center">
                   Nenhum fornecedor encontrado
                 </TableCell>
               </TableRow>
@@ -409,13 +424,6 @@ const SupplierManager: React.FC<SupplierManagerProps> = ({
                       label={supplier.locations_count || 0}
                       size="small"
                       color="primary"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Chip
-                      label={supplier.is_active ? 'Ativo' : 'Inativo'}
-                      color={supplier.is_active ? 'success' : 'default'}
-                      size="small"
                     />
                   </TableCell>
                   <TableCell>
@@ -536,22 +544,6 @@ const SupplierManager: React.FC<SupplierManagerProps> = ({
                     }
                   />
                 </Box>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={formData.is_active}
-                      onChange={e =>
-                        setFormData(prev => ({
-                          ...prev,
-                          is_active: e.target.checked,
-                        }))
-                      }
-                    />
-                  }
-                  label="Ativo"
-                />
               </Grid>
               <Grid item xs={12}>
                 <TextField

@@ -65,6 +65,15 @@ import SupplierManager from '../components/Suppliers/SupplierManager';
 import SupplierLocationLinkDialog from '../components/Suppliers/SupplierLocationLinkDialog';
 import { Dialog as MuiDialog } from '@mui/material';
 import { useFixAriaHidden } from '../hooks/useFixAriaHidden';
+import { usePermissions } from '../hooks/usePermissions';
+import {
+  useOptimizedQuery,
+  useReferenceQuery,
+  useConditionalQuery,
+} from '../hooks/useOptimizedQuery';
+import SkeletonLocationCard from '../components/Common/SkeletonLocationCard';
+import { useDebounce } from '../hooks/useDebounce';
+import { toast } from 'react-toastify';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -91,8 +100,16 @@ function TabPanel(props: TabPanelProps) {
 export default function LocationsPage() {
   console.log('📍 LocationsPage rendering...');
   useFixAriaHidden();
+  const permissions = usePermissions();
 
   const [tabValue, setTabValue] = useState(0);
+
+  // Estado local para busca (atualiza imediatamente)
+  const [searchInput, setSearchInput] = useState('');
+
+  // Busca debounced (só atualiza após 500ms sem digitar)
+  const debouncedSearch = useDebounce(searchInput, 500);
+
   const [searchParams, setSearchParams] = useState<AdvancedSearchParams>({
     page: 1,
     page_size: 12,
@@ -135,36 +152,40 @@ export default function LocationsPage() {
     null
   );
 
+  // Atualizar searchParams quando debouncedSearch mudar
+  useEffect(() => {
+    setSearchParams(prev => ({
+      ...prev,
+      q: debouncedSearch || undefined,
+      page: 1, // Reset para primeira página ao buscar
+    }));
+  }, [debouncedSearch]);
+
+  // Query otimizada para locations - categorizada como 'dynamic'
   const {
     data: searchResults,
     isLoading,
     error,
-  } = useQuery<SearchResponse>({
+  } = useOptimizedQuery<SearchResponse>({
     queryKey: ['locations', searchParams],
     queryFn: async () => {
-      try {
-        console.log('🔍 Searching locations with params:', searchParams);
-        const result = await locationService.getLocations(searchParams);
-        console.log('✅ Search results:', result);
-        return result;
-      } catch (err) {
-        console.error('❌ Error in location search:', err);
-        throw err;
-      }
+      console.log('🔍 Searching locations with params:', searchParams);
+      const result = await locationService.getLocations(searchParams);
+      console.log('✅ Search results:', result);
+      return result;
     },
+    dataCategory: 'dynamic', // Dados que mudam com frequência
     placeholderData: previousData => previousData,
-    retry: 1,
-    staleTime: 2 * 60 * 1000, // 2 minutos
-    gcTime: 5 * 60 * 1000, // 5 minutos
-    refetchOnWindowFocus: false,
   });
 
-  // Suppliers list for Suppliers tab
-  const { data: suppliersResp, isLoading: suppliersLoading } = useQuery({
-    queryKey: ['suppliers', 'locations-tab'],
-    queryFn: () => supplierService.getSuppliers({ skip: 0, limit: 100 }),
-    staleTime: 5 * 60 * 1000,
-  });
+  // Suppliers list for Suppliers tab - apenas quando tab está ativa
+  const { data: suppliersResp, isLoading: suppliersLoading } =
+    useConditionalQuery({
+      queryKey: ['suppliers', 'locations-tab'],
+      queryFn: () => supplierService.getSuppliers({ skip: 0, limit: 100 }),
+      dataCategory: 'reference', // Dados de referência
+      enabled: tabValue === 2, // Só carrega quando tab Fornecedores está ativa
+    });
 
   const suppliers: SupplierApi[] = suppliersResp?.suppliers || [];
 
@@ -212,11 +233,11 @@ export default function LocationsPage() {
     }
   }, [suppliers, selectedSupplierId]);
 
-  // Locations linked to selected supplier
+  // Locations linked to selected supplier - condicional
   const { data: supplierLocationsResp, isLoading: supplierLocationsLoading } =
-    useQuery({
+    useConditionalQuery({
       queryKey: ['supplier-locations', selectedSupplierId],
-      enabled: !!selectedSupplierId,
+      enabled: !!selectedSupplierId && tabValue === 2,
       queryFn: () =>
         locationService.getLocations({
           supplier_ids: selectedSupplierId ? [selectedSupplierId] : [],
@@ -224,20 +245,18 @@ export default function LocationsPage() {
           page_size: 12,
           include: ['supplier', 'photos', 'tags'],
         }),
-      staleTime: 2 * 60 * 1000,
+      dataCategory: 'dynamic',
     });
 
-  // Query para buscar tags com cache otimizado
+  // Query para buscar tags - dados de referência
   const {
     data: tags = [],
     isLoading: tagsLoading,
     refetch: refetchTags,
-  } = useQuery({
+  } = useReferenceQuery({
     queryKey: ['tags'],
     queryFn: () => tagService.getTags(),
-    staleTime: 2 * 60 * 1000, // 2 minutos (reduzido para atualizar mais rápido)
-    gcTime: 5 * 60 * 1000, // 5 minutos
-    refetchOnWindowFocus: false,
+    // useReferenceQuery já aplica staleTime: 10min, gcTime: 30min
   });
 
   // Verificar se o nome da tag é duplicado
@@ -322,6 +341,13 @@ export default function LocationsPage() {
   });
 
   const handleSearch = (newParams: Partial<AdvancedSearchParams>) => {
+    // Se for busca por texto, atualiza apenas o input local
+    if ('q' in newParams) {
+      setSearchInput(newParams.q || '');
+      return;
+    }
+
+    // Para outros filtros, atualiza diretamente
     setSearchParams(prev => ({
       ...prev,
       ...newParams,
@@ -431,13 +457,25 @@ export default function LocationsPage() {
   const handleEditLocation = async (locationData: Partial<Location>) => {
     try {
       if (selectedLocation?.id) {
+        console.log('📝 Updating location:', selectedLocation.id);
         await locationService.updateLocation(selectedLocation.id, locationData);
-        queryClient.invalidateQueries({ queryKey: ['locations'] });
+        console.log(
+          '✅ Location updated successfully, invalidating queries...'
+        );
+        await queryClient.invalidateQueries({
+          queryKey: ['locations'],
+          refetchType: 'active',
+        });
+        console.log('🔄 Refetching location data...');
+        await queryClient.refetchQueries({ queryKey: ['locations'] });
+        console.log('✅ Refetch complete');
         setIsEditModalOpen(false);
         setSelectedLocation(null);
+        toast.success('Locação atualizada com sucesso!');
       }
     } catch (error) {
-      console.error('Erro ao editar locação:', error);
+      console.error('❌ Erro ao editar locação:', error);
+      toast.error('Erro ao editar locação');
       throw error;
     }
   };
@@ -445,27 +483,49 @@ export default function LocationsPage() {
   const handleDeleteLocation = async (location: Location) => {
     try {
       if (location.id) {
+        console.log('🗑️ Deleting location:', location.id);
         await locationService.deleteLocation(location.id);
-        queryClient.invalidateQueries({ queryKey: ['locations'] });
+        console.log(
+          '✅ Location deleted successfully, invalidating queries...'
+        );
+        await queryClient.invalidateQueries({
+          queryKey: ['locations'],
+          refetchType: 'active',
+        });
+        console.log('🔄 Refetching location data...');
+        await queryClient.refetchQueries({ queryKey: ['locations'] });
+        console.log('✅ Refetch complete');
         setIsDeleteModalOpen(false);
         setSelectedLocation(null);
+        toast.success('Locação excluída com sucesso!');
       }
     } catch (error) {
-      console.error('Erro ao excluir locação:', error);
+      console.error('❌ Erro ao excluir locação:', error);
+      toast.error('Erro ao excluir locação');
       throw error;
     }
   };
 
   const handleCreateLocation = async (locationData: Partial<Location>) => {
     try {
+      console.log('➕ Creating location:', locationData);
       // Se já vier com ID, foi criado via createLocationWithPhotos dentro do modal
       if (!locationData.id) {
         await locationService.createLocation(locationData);
       }
-      queryClient.invalidateQueries({ queryKey: ['locations'] });
+      console.log('✅ Location created successfully, invalidating queries...');
+      await queryClient.invalidateQueries({
+        queryKey: ['locations'],
+        refetchType: 'active',
+      });
+      console.log('🔄 Refetching location data...');
+      await queryClient.refetchQueries({ queryKey: ['locations'] });
+      console.log('✅ Refetch complete');
       setIsCreateModalOpen(false);
+      toast.success('Locação criada com sucesso!');
     } catch (error) {
-      console.error('Erro ao criar locação:', error);
+      console.error('❌ Erro ao criar locação:', error);
+      toast.error('Erro ao criar locação');
       throw error;
     }
   };
@@ -533,15 +593,17 @@ export default function LocationsPage() {
                 >
                   Montar Apresentação (Fotos)
                 </Button>
-                <Button
-                  variant="contained"
-                  startIcon={<Add />}
-                  size="large"
-                  sx={{ borderRadius: 2 }}
-                  onClick={() => setIsCreateModalOpen(true)}
-                >
-                  Nova Locação
-                </Button>
+                {permissions.canManageLocations && (
+                  <Button
+                    variant="contained"
+                    startIcon={<Add />}
+                    size="large"
+                    sx={{ borderRadius: 2 }}
+                    onClick={() => setIsCreateModalOpen(true)}
+                  >
+                    Nova Locação
+                  </Button>
+                )}
               </>
             )}
             {tabValue === 1 && (
@@ -625,7 +687,7 @@ export default function LocationsPage() {
               >
                 <TextField
                   placeholder="Buscar locações..."
-                  value={searchParams.q || ''}
+                  value={searchInput}
                   onChange={e => handleSearch({ q: e.target.value })}
                   sx={{ flexGrow: 1 }}
                   InputProps={{
@@ -633,6 +695,11 @@ export default function LocationsPage() {
                       <Search sx={{ mr: 1, color: 'text.secondary' }} />
                     ),
                   }}
+                  helperText={
+                    searchInput && searchInput !== debouncedSearch
+                      ? 'Pesquisando...'
+                      : undefined
+                  }
                 />
 
                 <Button
@@ -670,9 +737,21 @@ export default function LocationsPage() {
 
             {/* Resultados */}
             {isLoading ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-                <CircularProgress />
-              </Box>
+              // Skeleton loaders ao invés de spinner genérico
+              <Grid container spacing={3}>
+                {Array.from({ length: 8 }).map((_, index) => (
+                  <Grid
+                    item
+                    xs={12}
+                    sm={6}
+                    md={4}
+                    lg={3}
+                    key={`skeleton-${index}`}
+                  >
+                    <SkeletonLocationCard />
+                  </Grid>
+                ))}
+              </Grid>
             ) : (
               <>
                 {/* Estatísticas */}
