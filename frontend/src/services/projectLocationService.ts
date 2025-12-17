@@ -157,6 +157,22 @@ class ProjectLocationService {
 
     const mappedResult = this.mapFromBackend(result);
 
+    // ✨ Criar etapas padrão automaticamente após criar a locação
+    try {
+      const { projectLocationStageService } = await import(
+        './projectLocationStageService'
+      );
+      console.log(
+        '📝 Auto-creating default stages for project_location:',
+        result.id
+      );
+      await projectLocationStageService.createDefaultStages(result.id);
+      console.log('✅ Default stages created successfully');
+    } catch (stageError) {
+      console.warn('⚠️ Erro ao criar etapas padrão:', stageError);
+      // Não lançar erro - a locação foi criada com sucesso
+    }
+
     // ✨ Sincronizar com agenda se houver datas de rental
     if (result.rental_start && result.rental_end) {
       try {

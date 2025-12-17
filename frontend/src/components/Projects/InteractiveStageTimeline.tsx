@@ -41,6 +41,8 @@ const getStatusIcon = (
       return <Cancel {...props} sx={{ color: '#f44336' }} />;
     case StageStatus.ON_HOLD:
       return <Pause {...props} sx={{ color: '#9e9e9e' }} />;
+    case StageStatus.SKIPPED:
+      return <Cancel {...props} sx={{ color: '#757575' }} />;
     default:
       return <RadioButtonUnchecked {...props} sx={{ color: '#9e9e9e' }} />;
   }
@@ -68,6 +70,7 @@ const getStatusLabel = (status: StageStatus): string => {
     [StageStatus.COMPLETED]: 'Concluída',
     [StageStatus.CANCELLED]: 'Cancelada',
     [StageStatus.ON_HOLD]: 'Em Espera',
+    [StageStatus.SKIPPED]: 'Pulada',
   };
   return labels[status] || status;
 };
@@ -137,6 +140,11 @@ export default function InteractiveStageTimeline({
       value: StageStatus.COMPLETED,
       label: 'Concluída',
       icon: getStatusIcon(StageStatus.COMPLETED, 'small'),
+    },
+    {
+      value: StageStatus.SKIPPED,
+      label: '⏭️ Pular Etapa',
+      icon: getStatusIcon(StageStatus.SKIPPED, 'small'),
     },
     {
       value: StageStatus.ON_HOLD,

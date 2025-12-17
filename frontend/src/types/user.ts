@@ -266,6 +266,7 @@ export enum StageStatus {
   COMPLETED = 'completed',
   CANCELLED = 'cancelled',
   ON_HOLD = 'on_hold',
+  SKIPPED = 'skipped',
 }
 
 export interface ProjectLocationStage {

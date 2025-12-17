@@ -172,11 +172,12 @@ export default function LocationStagesLoader({
 // Helper para labels
 function getStatusLabel(status: StageStatus): string {
   const labels: Record<StageStatus, string> = {
-    pending: 'Pendente',
-    in_progress: 'Em Progresso',
-    completed: 'Concluída',
-    cancelled: 'Cancelada',
-    on_hold: 'Em Espera',
+    [StageStatus.PENDING]: 'Pendente',
+    [StageStatus.IN_PROGRESS]: 'Em Progresso',
+    [StageStatus.COMPLETED]: 'Concluída',
+    [StageStatus.CANCELLED]: 'Cancelada',
+    [StageStatus.ON_HOLD]: 'Em Espera',
+    [StageStatus.SKIPPED]: 'Pulada',
   };
   return labels[status] || status;
 }
