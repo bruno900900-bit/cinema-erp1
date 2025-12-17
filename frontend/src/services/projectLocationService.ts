@@ -173,31 +173,30 @@ class ProjectLocationService {
       // Não lançar erro - a locação foi criada com sucesso
     }
 
-    // ✨ Sincronizar com agenda se houver datas de rental
-    if (result.rental_start && result.rental_end) {
-      try {
-        // Buscar informações do projeto e locação para criar evento descritivo
-        const { data: projectData } = await supabase
-          .from('projects')
-          .select('title')
-          .eq('id', result.project_id)
-          .single();
+    // ✨ Sincronizar TODAS as datas com agenda (não depende de rental)
+    try {
+      // Buscar informações do projeto e locação para criar evento descritivo
+      const { data: projectData } = await supabase
+        .from('projects')
+        .select('title')
+        .eq('id', result.project_id)
+        .single();
 
-        const { data: locationData } = await supabase
-          .from('locations')
-          .select('title')
-          .eq('id', result.location_id)
-          .single();
+      const { data: locationData } = await supabase
+        .from('locations')
+        .select('title')
+        .eq('id', result.location_id)
+        .single();
 
-        const projectTitle = projectData?.title || 'Projeto';
-        const locationTitle = locationData?.title || 'Locação';
+      const projectTitle = projectData?.title || 'Projeto';
+      const locationTitle = locationData?.title || 'Locação';
 
-        await syncProjectLocationToAgenda(result, projectTitle, locationTitle);
-        console.log('✅ Evento de rental sincronizado com agenda');
-      } catch (syncError) {
-        console.warn('⚠️ Erro ao sincronizar rental com agenda:', syncError);
-        // Não lançar erro - a locação foi criada com sucesso
-      }
+      // Sincronizar TODAS as datas (rental, visita, gravação, entrega)
+      await syncProjectLocationToAgenda(result, projectTitle, locationTitle);
+      console.log('✅ Datas sincronizadas com agenda');
+    } catch (syncError) {
+      console.warn('⚠️ Erro ao sincronizar datas com agenda:', syncError);
+      // Não lançar erro - a locação foi criada com sucesso
     }
 
     return mappedResult;
