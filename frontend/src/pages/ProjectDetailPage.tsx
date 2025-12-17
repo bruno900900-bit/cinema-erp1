@@ -46,6 +46,7 @@ import ProjectBudgetDashboard from '@/components/Projects/ProjectBudgetDashboard
 import LocationSelectionModal from '@/components/Projects/LocationSelectionModal';
 import ProjectReportModal from '@/components/Projects/ProjectReportModal';
 import ProjectWorkflowPanel from '@/components/Projects/ProjectWorkflowPanel';
+import ProjectQuickActions from '@/components/Projects/ProjectQuickActions';
 import { formatDateBR, toInputDate } from '@/utils/date';
 import { toast } from 'react-toastify';
 
@@ -267,7 +268,7 @@ const ProjectDetailPage: React.FC = () => {
 
   return (
     <Box sx={{ p: 3 }}>
-      {/* Header */}
+      {/* Enhanced Header */}
       <Box sx={{ mb: 3 }}>
         <Breadcrumbs sx={{ mb: 2 }}>
           <Link
@@ -282,50 +283,125 @@ const ProjectDetailPage: React.FC = () => {
           <Typography color="text.primary">{project.title}</Typography>
         </Breadcrumbs>
 
-        <Box
+        {/* Project Title Card */}
+        <Paper
           sx={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'flex-start',
+            p: 3,
+            background:
+              'linear-gradient(135deg, rgba(33,150,243,0.05) 0%, rgba(156,39,176,0.05) 100%)',
+            borderLeft: '4px solid',
+            borderLeftColor: 'primary.main',
+            mb: 2,
           }}
         >
-          <Box>
-            <Typography variant="h4" gutterBottom>
-              {project.title}
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-              <Chip
-                label={project.status}
-                color={
-                  project.status === 'completed'
-                    ? 'success'
-                    : project.status === 'in_progress'
-                    ? 'warning'
-                    : 'default'
-                }
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'flex-start',
+            }}
+          >
+            <Box sx={{ flex: 1 }}>
+              <Box
+                sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}
+              >
+                <Typography variant="h4" sx={{ fontWeight: 600 }}>
+                  🎬 {project.title}
+                </Typography>
+                <Chip
+                  label={
+                    project.status === 'completed'
+                      ? '✅ Concluído'
+                      : project.status === 'in_progress'
+                      ? '🚧 Em Andamento'
+                      : project.status === 'planning'
+                      ? '📋 Planejamento'
+                      : '⏸️ Pausado'
+                  }
+                  color={
+                    project.status === 'completed'
+                      ? 'success'
+                      : project.status === 'in_progress'
+                      ? 'warning'
+                      : project.status === 'planning'
+                      ? 'info'
+                      : 'default'
+                  }
+                  sx={{
+                    fontWeight: 600,
+                    fontSize: '0.9rem',
+                    px: 2,
+                    transition: 'all 0.3s',
+                    '&:hover': {
+                      transform: 'scale(1.05)',
+                      boxShadow: 2,
+                    },
+                  }}
+                />
+              </Box>
+
+              <Box sx={{ display: 'flex', gap: 3, mt: 2 }}>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    👤 Responsável
+                  </Typography>
+                  <Typography variant="body2" fontWeight="medium">
+                    {responsibleUser?.full_name || 'N/A'}
+                  </Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    🏢 Cliente
+                  </Typography>
+                  <Typography variant="body2" fontWeight="medium">
+                    {project.client_name || 'N/A'}
+                  </Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    💰 Orçamento
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    fontWeight="medium"
+                    color={
+                      (project.budget_spent || 0) > (project.budget || 0)
+                        ? 'error.main'
+                        : 'success.main'
+                    }
+                  >
+                    {formatCurrency(project.budget || 0)}
+                  </Typography>
+                </Box>
+              </Box>
+            </Box>
+
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <Button
+                  variant="contained"
+                  startIcon={<Edit />}
+                  onClick={() => navigate(`/projects/${projectId}/edit`)}
+                  sx={{
+                    transition: 'all 0.3s',
+                    '&:hover': {
+                      transform: 'translateY(-2px)',
+                      boxShadow: 4,
+                    },
+                  }}
+                >
+                  Editar
+                </Button>
+              </Box>
+
+              {/* Quick Actions */}
+              <ProjectQuickActions
+                onGenerateReport={() => setIsReportModalOpen(true)}
+                onExportPDF={handleExportReport}
               />
-              <Typography variant="body2" color="text.secondary">
-                Responsável: {responsibleUser?.full_name || 'N/A'}
-              </Typography>
             </Box>
           </Box>
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            <Button
-              variant="outlined"
-              startIcon={<Description />}
-              onClick={() => setIsReportModalOpen(true)}
-            >
-              Gerar Relatório
-            </Button>
-            <Button
-              variant="outlined"
-              startIcon={<Edit />}
-              onClick={() => navigate(`/projects/${projectId}/edit`)}
-            >
-              Editar
-            </Button>
-          </Box>
-        </Box>
+        </Paper>
       </Box>
 
       {/* Informações do Projeto */}
