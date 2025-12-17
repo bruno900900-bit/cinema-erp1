@@ -197,7 +197,14 @@ const EventDetailModal: React.FC<EventDetailModalProps> = ({
         <Grid container spacing={3}>
           {/* Informações Principais */}
           <Grid item xs={12}>
-            <Paper sx={{ p: 2, bgcolor: 'grey.50' }}>
+            <Paper
+              sx={{
+                p: 2,
+                background:
+                  'linear-gradient(135deg, rgba(33, 150, 243, 0.1) 0%, rgba(33, 150, 243, 0.05) 100%)',
+                borderLeft: '4px solid #2196F3',
+              }}
+            >
               <Typography variant="h6" gutterBottom>
                 📋 Informações do Evento
               </Typography>
@@ -276,7 +283,14 @@ const EventDetailModal: React.FC<EventDetailModalProps> = ({
           {/* Descrição */}
           {event.description && (
             <Grid item xs={12}>
-              <Paper sx={{ p: 2 }}>
+              <Paper
+                sx={{
+                  p: 2,
+                  background:
+                    'linear-gradient(135deg, rgba(103, 58, 183, 0.1) 0%, rgba(103, 58, 183, 0.05) 100%)',
+                  borderLeft: '4px solid #673AB7',
+                }}
+              >
                 <Typography variant="h6" gutterBottom>
                   📝 Descrição
                 </Typography>
@@ -287,7 +301,14 @@ const EventDetailModal: React.FC<EventDetailModalProps> = ({
 
           {/* Datas e Horários */}
           <Grid item xs={12}>
-            <Paper sx={{ p: 2 }}>
+            <Paper
+              sx={{
+                p: 2,
+                background:
+                  'linear-gradient(135deg, rgba(255, 152, 0, 0.1) 0%, rgba(255, 152, 0, 0.05) 100%)',
+                borderLeft: '4px solid #FF9800',
+              }}
+            >
               <Typography variant="h6" gutterBottom>
                 🕒 Datas e Horários
               </Typography>
@@ -353,7 +374,14 @@ const EventDetailModal: React.FC<EventDetailModalProps> = ({
           {/* Metadados Específicos */}
           {event.metadata && (
             <Grid item xs={12}>
-              <Paper sx={{ p: 2 }}>
+              <Paper
+                sx={{
+                  p: 2,
+                  background:
+                    'linear-gradient(135deg, rgba(76, 175, 80, 0.1) 0%, rgba(76, 175, 80, 0.05) 100%)',
+                  borderLeft: '4px solid #4CAF50',
+                }}
+              >
                 <Typography variant="h6" gutterBottom>
                   🔗 Detalhes Relacionados
                 </Typography>
@@ -482,7 +510,14 @@ const EventDetailModal: React.FC<EventDetailModalProps> = ({
 
           {/* IDs de Referência */}
           <Grid item xs={12}>
-            <Paper sx={{ p: 2, bgcolor: 'grey.50' }}>
+            <Paper
+              sx={{
+                p: 2,
+                background:
+                  'linear-gradient(135deg, rgba(156, 39, 176, 0.1) 0%, rgba(156, 39, 176, 0.05) 100%)',
+                borderLeft: '4px solid #9C27B0',
+              }}
+            >
               <Typography variant="h6" gutterBottom>
                 🔗 Referências
               </Typography>
