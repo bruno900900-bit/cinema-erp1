@@ -54,7 +54,7 @@ import { userService } from '../../services/userService';
 import { formatDateBR } from '../../utils/date';
 import LocationStageTimeline from './LocationStageTimeline';
 import SimpleStageList from './SimpleStageList';
-import LocationStagesLoader from './LocationStagesLoader';
+import { LocationDemandsList } from '../Demands';
 import { useAuth } from '../../hooks/useAuth';
 
 interface ProjectLocationsOverviewProps {
@@ -570,12 +570,11 @@ export default function ProjectLocationsOverview({
                     </Box>
                   </Box>
 
-                  {/* Timeline de Etapas */}
-                  <LocationStagesLoader
-                    projectId={projectId}
+                  {/* Lista de Demandas */}
+                  <LocationDemandsList
+                    projectId={Number(projectId)}
                     location={location}
-                    isExpanded={isExpanded}
-                    onStageStatusUpdate={handleStageStatusUpdate}
+                    compact={!isExpanded}
                   />
 
                   {/* Ações */}
