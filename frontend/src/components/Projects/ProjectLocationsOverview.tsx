@@ -52,7 +52,7 @@ import { projectLocationService } from '../../services/projectLocationService';
 import { projectLocationStageService } from '../../services/projectLocationStageService';
 import { userService } from '../../services/userService';
 import { formatDateBR } from '../../utils/date';
-import { LocationDemandsList } from '../Demands';
+import { ProjectDemandsList } from '../Demands';
 import { useAuth } from '../../hooks/useAuth';
 
 interface ProjectLocationsOverviewProps {
@@ -283,6 +283,16 @@ export default function ProjectLocationsOverview({
           </Grid>
         </Grid>
       </Paper>
+
+      {/* Lista Unificada de Demandas */}
+      {projectLocations.length > 0 && (
+        <Paper sx={{ p: 3, mb: 3, borderRadius: 2 }}>
+          <ProjectDemandsList
+            projectId={Number(projectId)}
+            projectLocations={projectLocations}
+          />
+        </Paper>
+      )}
 
       {/* Lista de Locações */}
       {projectLocations.length === 0 ? (
@@ -519,13 +529,6 @@ export default function ProjectLocationsOverview({
                       </AvatarGroup>
                     </Box>
                   </Box>
-
-                  {/* Lista de Demandas */}
-                  <LocationDemandsList
-                    projectId={Number(projectId)}
-                    location={location}
-                    compact={!isExpanded}
-                  />
 
                   {/* Ações */}
                   <Box
