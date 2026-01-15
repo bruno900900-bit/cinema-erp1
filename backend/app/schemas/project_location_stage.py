@@ -120,7 +120,7 @@ class ProjectLocationStageFilter(BaseModel):
             return [StageStatus(x.strip()) for x in v.split(',')]
         return v
 
-class Project LocationStagesSummary(BaseModel):
+class ProjectLocationStagesSummary(BaseModel):
     """Resumo das etapas de locações em um projeto"""
     project_id: int
     total_stages: int

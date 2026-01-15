@@ -5,7 +5,7 @@
 
 const { createClient } = require('@supabase/supabase-js');
 
-const SUPABASE_URL = 'https://rwpmtuohcvnciemtsjge.supabase.co';
+const SUPABASE_URL = 'https://mjrjjslawywdcgvaxtzv.supabase.co';
 const SUPABASE_SERVICE_ROLE_KEY =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ3cG10dW9oY3ZuY2llbXRzamdlIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NTMxMzU3NiwiZXhwIjoyMDgwODg5NTc2fQ.d1c1WPyOtRBkJ1E3DwYUtoQ7FUJ0iSGA14dokqx_8ww';
 
@@ -88,7 +88,7 @@ async function setupStoragePolicies() {
     '\n📋 IMPORTANTE: Se o upload ainda não funcionar, você precisa:'
   );
   console.log(
-    '   1. Acesse: https://supabase.com/dashboard/project/rwpmtuohcvnciemtsjge/storage/buckets'
+    '   1. Acesse: https://supabase.com/dashboard/project/mjrjjslawywdcgvaxtzv/storage/buckets'
   );
   console.log('   2. Clique no bucket "images"');
   console.log('   3. Vá na aba "Policies"');

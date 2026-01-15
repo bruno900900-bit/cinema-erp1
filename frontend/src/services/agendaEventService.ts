@@ -1,17 +1,31 @@
 import { supabase } from '../config/supabaseClient';
 
-// Enums for event types and statuses
+// Enums for event types - MUST MATCH PostgreSQL event_type enum
 export enum EventType {
-  MEETING = 'meeting',
-  VISIT = 'visit',
-  DEADLINE = 'deadline',
-  OTHER = 'other',
+  PROJECT_CREATED = 'project_created',
+  PROJECT_START = 'project_start',
+  PROJECT_END = 'project_end',
+  LOCATION_RENTAL_START = 'location_rental_start',
+  LOCATION_RENTAL_END = 'location_rental_end',
+  LOCATION_RENTAL_FULL = 'location_rental_full',
+  VISIT_SCHEDULED = 'visit_scheduled',
+  TECHNICAL_VISIT = 'technical_visit',
+  FILMING_START = 'filming_start',
+  FILMING_END = 'filming_end',
+  FILMING_PERIOD = 'filming_period',
+  DELIVERY = 'delivery',
+  CONTRACT_SIGNED = 'contract_signed',
+  PAYMENT_DUE = 'payment_due',
+  CUSTOM = 'custom',
 }
 
+// Event Status - MUST MATCH PostgreSQL event_status enum
 export enum EventStatus {
   SCHEDULED = 'scheduled',
+  IN_PROGRESS = 'in_progress',
   COMPLETED = 'completed',
   CANCELLED = 'cancelled',
+  POSTPONED = 'postponed',
 }
 
 export interface AgendaEvent {
@@ -28,6 +42,7 @@ export interface AgendaEvent {
   status?: EventStatus | string;
   priority?: number;
   color?: string;
+  metadata_json?: Record<string, unknown>; // ✅ Adicionado para mapApiEvent
   created_at?: string;
   updated_at?: string;
 }

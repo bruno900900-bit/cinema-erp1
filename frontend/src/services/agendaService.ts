@@ -305,19 +305,21 @@ class AgendaService {
         );
       } else {
         const apiFilters: AgendaEventFilter = {};
-        if (startIso) apiFilters.start_date = startIso;
-        if (endIso) apiFilters.end_date = endIso;
+        if (startIso) apiFilters.startDate = startIso;
+        if (endIso) apiFilters.endDate = endIso;
         if (filters.types && filters.types.length > 0)
           apiFilters.event_type = filters.types[0] as any;
         if (filters.projects && filters.projects.length > 0)
           apiFilters.project_id = Number(filters.projects[0]);
         if (filters.locations && filters.locations.length > 0)
           apiFilters.location_id = filters.locations[0];
-        if (filters.priority && filters.priority.length > 0)
-          apiFilters.priority = Number(filters.priority[0]);
 
-        const response = await agendaEventService.getEvents(apiFilters);
-        apiEvents = response.events;
+        // Use getFilteredEvents when we have filters, otherwise getEvents
+        if (Object.keys(apiFilters).length > 0) {
+          apiEvents = await agendaEventService.getFilteredEvents(apiFilters);
+        } else {
+          apiEvents = await agendaEventService.getEvents();
+        }
       }
 
       const mappedEvents = apiEvents.map(event => this.mapApiEvent(event));

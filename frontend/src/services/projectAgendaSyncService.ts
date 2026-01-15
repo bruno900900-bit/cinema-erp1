@@ -33,7 +33,7 @@ export async function syncProjectToAgenda(project: Project): Promise<void> {
         await agendaEventService.createEvent({
           title: `📅 Início: ${project.title}`,
           description: `Início do projeto para ${project.client_name}`,
-          event_type: 'project',
+          event_type: 'project_start',
           start_date: startDate,
           end_date: startDate,
           all_day: true,
@@ -51,7 +51,7 @@ export async function syncProjectToAgenda(project: Project): Promise<void> {
         await agendaEventService.createEvent({
           title: `🏁 Fim: ${project.title}`,
           description: `Entrega final do projeto para ${project.client_name}`,
-          event_type: 'project',
+          event_type: 'project_end',
           start_date: endDate,
           end_date: endDate,
           all_day: true,
@@ -100,7 +100,7 @@ export async function syncProjectLocationToAgenda(
         await agendaEventService.createEvent({
           title: `📍 ${locationTitle}`,
           description: `Aluguel de locação para ${projectTitle}`,
-          event_type: 'location',
+          event_type: 'location_rental_full',
           start_date: startDate,
           end_date: endDate,
           all_day: true,
@@ -121,7 +121,7 @@ export async function syncProjectLocationToAgenda(
         await agendaEventService.createEvent({
           title: `🚶 Visitação: ${locationTitle}`,
           description: `Visitação da locação para ${projectTitle}`,
-          event_type: 'visit',
+          event_type: 'visit_scheduled',
           start_date: visitDate,
           end_date: visitDate,
           all_day: true,
@@ -142,7 +142,7 @@ export async function syncProjectLocationToAgenda(
         await agendaEventService.createEvent({
           title: `🔧 Visita Técnica: ${locationTitle}`,
           description: `Visita técnica da locação para ${projectTitle}`,
-          event_type: 'technical',
+          event_type: 'technical_visit',
           start_date: techVisitDate,
           end_date: techVisitDate,
           all_day: true,
@@ -168,7 +168,7 @@ export async function syncProjectLocationToAgenda(
         await agendaEventService.createEvent({
           title: `🎬 Gravação: ${locationTitle}`,
           description: `Período de filmagem em ${locationTitle} para ${projectTitle}`,
-          event_type: 'filming',
+          event_type: 'filming_period',
           start_date: filmingStart,
           end_date: filmingEnd,
           all_day: true,
@@ -187,7 +187,7 @@ export async function syncProjectLocationToAgenda(
         await agendaEventService.createEvent({
           title: `🎬 Início Gravação: ${locationTitle}`,
           description: `Início da filmagem em ${locationTitle} para ${projectTitle}`,
-          event_type: 'filming',
+          event_type: 'filming_start',
           start_date: filmingStart,
           end_date: filmingStart,
           all_day: true,

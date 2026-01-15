@@ -30,6 +30,7 @@ marshmallow-sqlalchemy==0.29.0
 # Exportação de apresentações
 python-pptx==0.6.21
 Jinja2==3.1.4
+openpyxl==3.1.2
 
 # Utilitários
 python-slugify==8.0.1

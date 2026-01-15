@@ -58,6 +58,7 @@ export const userService = {
     }),
 
   // Create user as admin (with Supabase Auth integration)
+  // This creates the user in Supabase Auth AND in our users table
   createUserAsAdmin: (userData: {
     email: string;
     full_name: string;
@@ -67,10 +68,39 @@ export const userService = {
     bio?: string;
   }) =>
     withDiagnostic('userService.createUserAsAdmin', async () => {
+      // Step 1: Create user in Supabase Auth using signUp
+      // Note: We use signUp since admin API requires service_role key (backend only)
+      // The user will need to verify their email or use magic link
+      const tempPassword = crypto.randomUUID(); // Temporary password, user will reset via email
+
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: userData.email,
+        password: tempPassword,
+        options: {
+          data: {
+            full_name: userData.full_name,
+            role: userData.role,
+          },
+          // This will send a confirmation email to the user
+          emailRedirectTo: `${window.location.origin}/login`,
+        },
+      });
+
+      if (authError) {
+        console.error('Error creating user in Supabase Auth:', authError);
+        throw new Error(`Erro ao criar usuário no Auth: ${authError.message}`);
+      }
+
+      if (!authData.user) {
+        throw new Error('Falha ao criar usuário no Supabase Auth');
+      }
+
+      // Step 2: Create user record in our users table with auth_id
       const { data, error } = await supabase
         .from('users')
         .insert([
           {
+            auth_id: authData.user.id, // Link to Supabase Auth user
             email: userData.email,
             full_name: userData.full_name,
             role: userData.role,
@@ -78,12 +108,20 @@ export const userService = {
             phone: userData.phone,
             bio: userData.bio,
             is_active: true,
-            password_hash: '', // Managed by Supabase Auth
+            password_hash: 'managed_by_supabase_auth', // Not used directly
           },
         ])
         .select()
         .single();
-      if (error) throw error;
+
+      if (error) {
+        console.error('Error creating user in database:', error);
+        // Note: We can't easily rollback the Auth user from frontend
+        // Consider using backend endpoint for atomic operation
+        throw new Error(`Erro ao criar usuário no banco: ${error.message}`);
+      }
+
+      console.log('✅ User created successfully in Auth and database:', data);
       return data as User;
     }),
 

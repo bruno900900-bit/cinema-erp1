@@ -194,16 +194,28 @@ export const projectService = {
     try {
       console.log('📋 ProjectService.getProjects - Iniciando busca (Supabase)');
 
-      const { data, error } = await supabase.from('projects').select('*');
+      const { data, error } = await supabase.from('projects').select(`
+          *,
+          project_locations (
+            *,
+            location:locations (*)
+          )
+        `);
 
       if (error) throw error;
 
+      // Map project_locations to locations for compatibility
+      const projectsWithLocations = (data || []).map((p: any) => ({
+        ...p,
+        locations: p.project_locations || [],
+      }));
+
       console.log(
         '✅ ProjectService.getProjects - Sucesso:',
-        data?.length,
+        projectsWithLocations?.length,
         'projetos'
       );
-      return (data as Project[]) || [];
+      return projectsWithLocations as Project[];
     } catch (error: any) {
       console.error('❌ ProjectService.getProjects - Erro (Supabase):', error);
       throw new Error('Não foi possível carregar os projetos');

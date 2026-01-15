@@ -26,7 +26,7 @@ npm run deploy
 Crie arquivo `.env.local` para desenvolvimento:
 
 ```env
-VITE_SUPABASE_URL=https://rwpmtuohcvnciemtsjge.supabase.co
+VITE_SUPABASE_URL=https://mjrjjslawywdcgvaxtzv.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key-here
 VITE_APP_ENV=development
 ```

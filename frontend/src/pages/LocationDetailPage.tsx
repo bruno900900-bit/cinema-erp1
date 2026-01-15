@@ -462,7 +462,7 @@ export default function LocationDetailPage() {
                               photo.file_path &&
                               !target.src.includes(photo.file_path)
                             ) {
-                              target.src = `https://rwpmtuohcvnciemtsjge.supabase.co/storage/v1/object/public/location-photos/${photo.file_path}`;
+                              target.src = `https://mjrjjslawywdcgvaxtzv.supabase.co/storage/v1/object/public/location-photos/${photo.file_path}`;
                             } else if (!target.src.includes('placeholder')) {
                               target.src =
                                 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="300" height="225"%3E%3Crect fill="%23f0f0f0" width="300" height="225"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" fill="%23999" font-size="14"%3EImagem não disponível%3C/text%3E%3C/svg%3E';

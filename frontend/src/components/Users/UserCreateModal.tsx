@@ -258,8 +258,10 @@ export default function UserCreateModal({
 
             <Grid item xs={12}>
               <Alert severity="info">
-                O usuário receberá um email para definir sua senha e poderá
-                fazer login imediatamente.
+                O usuário será criado no sistema de autenticação e receberá um
+                email de confirmação. Após confirmar o email, ele poderá fazer
+                login e definir sua senha através da opção "Esqueci minha
+                senha".
               </Alert>
             </Grid>
           </Grid>

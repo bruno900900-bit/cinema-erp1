@@ -358,23 +358,47 @@ export default function ContractGenerationModal({
               <PersonIcon color="primary" />
               Informações do Fornecedor (Locador)
             </Typography>
+
+            <Alert severity="info" sx={{ mb: 2 }}>
+              Selecione um fornecedor cadastrado ou preencha os dados
+              manualmente.
+            </Alert>
+
             <Grid container spacing={2}>
               <Grid item xs={12}>
                 <FormControl fullWidth>
-                  <InputLabel>Selecionar Fornecedor</InputLabel>
+                  <InputLabel>Selecionar Fornecedor do Sistema</InputLabel>
                   <Select
-                    value={contractData.supplier?.id || ''}
+                    value={contractData.supplier?.id || 'manual'}
                     onChange={e => {
-                      const supplier = suppliers.find(
-                        s => s.id === e.target.value
-                      );
-                      setContractData(prev => ({
-                        ...prev,
-                        supplier: supplier,
-                      }));
+                      if (e.target.value === 'manual') {
+                        setContractData(prev => ({
+                          ...prev,
+                          supplier: {
+                            id: 'manual',
+                            name: '',
+                            email: '',
+                            phone: '',
+                            address: '',
+                            cnpj: '',
+                          },
+                        }));
+                      } else {
+                        const supplier = suppliers.find(
+                          s => s.id === e.target.value
+                        );
+                        setContractData(prev => ({
+                          ...prev,
+                          supplier: supplier,
+                        }));
+                      }
                     }}
-                    label="Selecionar Fornecedor"
+                    label="Selecionar Fornecedor do Sistema"
                   >
+                    <MenuItem value="manual">
+                      <em>✏️ Digitar manualmente</em>
+                    </MenuItem>
+                    <Divider />
                     {suppliers.map(supplier => (
                       <MenuItem key={supplier.id} value={supplier.id}>
                         {supplier.name}
@@ -383,54 +407,99 @@ export default function ContractGenerationModal({
                   </Select>
                 </FormControl>
               </Grid>
-              {contractData.supplier && (
-                <>
-                  <Grid item xs={12} md={6}>
-                    <TextField
-                      label="Nome do Fornecedor"
-                      value={contractData.supplier.name}
-                      fullWidth
-                      disabled
-                    />
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <TextField
-                      label="CNPJ/CPF"
-                      value={
-                        contractData.supplier.cnpj ||
-                        (contractData.supplier as any).cpf ||
-                        ''
-                      }
-                      fullWidth
-                      disabled
-                    />
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <TextField
-                      label="E-mail"
-                      value={contractData.supplier.email}
-                      fullWidth
-                      disabled
-                    />
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <TextField
-                      label="Telefone"
-                      value={contractData.supplier.phone}
-                      fullWidth
-                      disabled
-                    />
-                  </Grid>
-                  <Grid item xs={12}>
-                    <TextField
-                      label="Endereço"
-                      value={contractData.supplier.address}
-                      fullWidth
-                      disabled
-                    />
-                  </Grid>
-                </>
-              )}
+
+              {/* Campos do fornecedor - sempre editáveis quando manual */}
+              <Grid item xs={12} md={6}>
+                <TextField
+                  label="Nome do Fornecedor"
+                  value={contractData.supplier?.name || ''}
+                  onChange={e =>
+                    setContractData(prev => ({
+                      ...prev,
+                      supplier: { ...prev.supplier!, name: e.target.value },
+                    }))
+                  }
+                  fullWidth
+                  required
+                  disabled={
+                    contractData.supplier?.id !== 'manual' &&
+                    !!contractData.supplier?.id
+                  }
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  label="CNPJ/CPF"
+                  value={
+                    contractData.supplier?.cnpj ||
+                    (contractData.supplier as any)?.cpf ||
+                    ''
+                  }
+                  onChange={e =>
+                    setContractData(prev => ({
+                      ...prev,
+                      supplier: { ...prev.supplier!, cnpj: e.target.value },
+                    }))
+                  }
+                  fullWidth
+                  required
+                  disabled={
+                    contractData.supplier?.id !== 'manual' &&
+                    !!contractData.supplier?.id
+                  }
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  label="E-mail"
+                  value={contractData.supplier?.email || ''}
+                  onChange={e =>
+                    setContractData(prev => ({
+                      ...prev,
+                      supplier: { ...prev.supplier!, email: e.target.value },
+                    }))
+                  }
+                  fullWidth
+                  disabled={
+                    contractData.supplier?.id !== 'manual' &&
+                    !!contractData.supplier?.id
+                  }
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  label="Telefone"
+                  value={contractData.supplier?.phone || ''}
+                  onChange={e =>
+                    setContractData(prev => ({
+                      ...prev,
+                      supplier: { ...prev.supplier!, phone: e.target.value },
+                    }))
+                  }
+                  fullWidth
+                  disabled={
+                    contractData.supplier?.id !== 'manual' &&
+                    !!contractData.supplier?.id
+                  }
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  label="Endereço"
+                  value={contractData.supplier?.address || ''}
+                  onChange={e =>
+                    setContractData(prev => ({
+                      ...prev,
+                      supplier: { ...prev.supplier!, address: e.target.value },
+                    }))
+                  }
+                  fullWidth
+                  disabled={
+                    contractData.supplier?.id !== 'manual' &&
+                    !!contractData.supplier?.id
+                  }
+                />
+              </Grid>
             </Grid>
           </Box>
         );
@@ -446,7 +515,97 @@ export default function ContractGenerationModal({
               <HomeIcon color="primary" />
               Dados da Locação
             </Typography>
+
+            <Alert severity="info" sx={{ mb: 2 }}>
+              Selecione uma locação do projeto ou preencha os dados manualmente.
+            </Alert>
+
             <Grid container spacing={2}>
+              {/* Location Selector from Project */}
+              <Grid item xs={12}>
+                <FormControl fullWidth>
+                  <InputLabel>Selecionar Locação do Projeto</InputLabel>
+                  <Select
+                    value={
+                      (contractData.rental as any)?.selectedLocationId ||
+                      'manual'
+                    }
+                    onChange={e => {
+                      const projectLocations =
+                        (project as any)?.locations ||
+                        (project as any)?.project_locations ||
+                        [];
+                      if (e.target.value === 'manual') {
+                        setContractData(prev => ({
+                          ...prev,
+                          rental: {
+                            ...prev.rental!,
+                            selectedLocationId: 'manual',
+                            property_address: '',
+                            property_description: '',
+                            monthly_rent: 0,
+                            rental_period_start: new Date(),
+                            rental_period_end: new Date(),
+                          } as any,
+                        }));
+                      } else {
+                        const loc = projectLocations.find(
+                          (l: any) => l.id === e.target.value
+                        );
+                        if (loc) {
+                          const location = loc.location || loc;
+                          const address = location?.street
+                            ? `${location.street}, ${location.number || ''} - ${
+                                location.city || ''
+                              }, ${location.state || ''}`
+                            : location?.title || loc.title || '';
+                          setContractData(prev => ({
+                            ...prev,
+                            rental: {
+                              ...prev.rental!,
+                              selectedLocationId: loc.id,
+                              property_address: address,
+                              property_description:
+                                location?.description ||
+                                location?.title ||
+                                loc.title ||
+                                '',
+                              monthly_rent:
+                                loc.daily_rate || loc.total_cost || 0,
+                              rental_period_start: loc.rental_start
+                                ? new Date(loc.rental_start)
+                                : new Date(),
+                              rental_period_end: loc.rental_end
+                                ? new Date(loc.rental_end)
+                                : new Date(),
+                            } as any,
+                          }));
+                        }
+                      }
+                    }}
+                    label="Selecionar Locação do Projeto"
+                  >
+                    <MenuItem value="manual">
+                      <em>✏️ Digitar manualmente</em>
+                    </MenuItem>
+                    <Divider />
+                    {(
+                      (project as any)?.locations ||
+                      (project as any)?.project_locations ||
+                      []
+                    ).map((loc: any) => (
+                      <MenuItem key={loc.id} value={loc.id}>
+                        📍{' '}
+                        {loc.location?.title ||
+                          loc.title ||
+                          `Locação #${loc.id}`}
+                        {loc.status === 'confirmed' && ' ✅'}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+
               <Grid item xs={12}>
                 <TextField
                   label="Endereço do Imóvel"

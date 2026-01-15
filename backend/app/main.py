@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
-from .api.v1.endpoints import visits_router, projects_router, locations_router, users_router, setup_router, quick_setup, auth, project_location_stages_router, project_locations_router, agenda_events, suppliers, tags_router, notifications_router, custom_filters_router
+from .api.v1.endpoints import visits_router, projects_router, locations_router, users_router, setup_router, quick_setup, auth, project_location_stages_router, project_locations_router, agenda_events, suppliers, tags_router, notifications_router, custom_filters_router, project_visit_locations_router, project_stages_router, location_demands
 from .api.v1.endpoints import presentations as presentations_router
 from .routers.export import router as export_router
 from .routers.dashboard import router as dashboard_router
@@ -160,6 +160,9 @@ app.include_router(export_router, prefix="/api/v1", dependencies=dependency)
 app.include_router(custom_filters_router, prefix="/api/v1/custom-filters", dependencies=dependency)
 app.include_router(dashboard_router, prefix="/api/v1", dependencies=dependency)
 app.include_router(presentations_router.router, prefix="/api/v1", dependencies=dependency)
+app.include_router(project_visit_locations_router, prefix="/api/v1", dependencies=dependency)
+app.include_router(project_stages_router, prefix="/api/v1/project-stages", dependencies=dependency)
+app.include_router(location_demands.router, prefix="/api/v1/location-demands", dependencies=dependency)
 
 # Servir arquivos estáticos (fotos)
 import os

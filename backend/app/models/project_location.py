@@ -79,6 +79,8 @@ class ProjectLocation(Base, TimestampMixin):
     responsible_user = relationship("User", foreign_keys=[responsible_user_id])
     coordinator_user = relationship("User", foreign_keys=[coordinator_user_id])
     stages = relationship("ProjectLocationStage", back_populates="project_location", cascade="all, delete-orphan")
+    project_photos = relationship("ProjectLocationPhoto", back_populates="project_location", cascade="all, delete-orphan")
+    demands = relationship("LocationDemand", back_populates="project_location", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<ProjectLocation(id={self.id}, project_id={self.project_id}, location_id={self.location_id}, status='{self.status}')>"

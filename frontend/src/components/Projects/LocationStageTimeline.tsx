@@ -13,6 +13,10 @@ import { ptBR } from 'date-fns/locale';
 
 interface LocationStageTimelineProps {
   stages: ProjectLocationStage[];
+  onAddStage?: () => void;
+  onDeleteStage?: (stageId: number) => void;
+  onUpdateStage?: (stageId: number, status: string) => void;
+  maxStages?: number;
 }
 
 const getStatusIcon = (status: StageStatus) => {
@@ -60,59 +64,82 @@ const getStatusLabel = (status: StageStatus): string => {
 
 export default function LocationStageTimeline({
   stages,
+  onAddStage,
+  onDeleteStage,
+  onUpdateStage,
+  maxStages = 7,
 }: LocationStageTimelineProps) {
   if (!stages || stages.length === 0) {
     return null;
   }
 
-  const sortedStages = [...stages].sort(
-    (a, b) => (a.order || 0) - (b.order || 0)
-  );
+  // Sort by order/index and limit to maxStages
+  const sortedStages = [...stages]
+    .sort(
+      (a, b) =>
+        ((a as any).order || (a as any).order_index || 0) -
+        ((b as any).order || (b as any).order_index || 0)
+    )
+    .slice(0, maxStages);
+
+  const completedCount = sortedStages.filter(
+    s => s.status === 'completed'
+  ).length;
 
   return (
-    <Box sx={{ mb: 3 }}>
-      <Typography
-        variant="subtitle2"
-        gutterBottom
-        sx={{ mb: 2, color: 'text.secondary' }}
+    <Box sx={{ mb: 2 }}>
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          mb: 1,
+        }}
       >
-        📊 Timeline das Etapas
-      </Typography>
+        <Typography variant="caption" color="text.secondary">
+          Etapas: {completedCount}/{sortedStages.length}
+        </Typography>
+        {onAddStage && sortedStages.length < maxStages && (
+          <Chip
+            label="+ Etapa"
+            size="small"
+            onClick={onAddStage}
+            sx={{
+              fontSize: 10,
+              height: 20,
+              cursor: 'pointer',
+              bgcolor: '#667eea',
+              color: '#fff',
+              '&:hover': { bgcolor: '#5a6fd6' },
+            }}
+          />
+        )}
+      </Box>
 
       <Box
-        sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}
+        sx={{
+          display: 'flex',
+          gap: 0.5,
+          flexWrap: 'wrap',
+          alignItems: 'center',
+        }}
       >
         {sortedStages.map((stage, index) => {
-          const modifiedDate = stage.status_changed_at
-            ? formatDistanceToNow(new Date(stage.status_changed_at), {
-                addSuffix: true,
-                locale: ptBR,
-              })
-            : null;
-
-          const modifiedBy =
-            stage.status_changed_by_user?.full_name ||
-            stage.responsible_user?.full_name;
-
           const tooltipContent = (
-            <Box>
+            <Box sx={{ p: 0.5 }}>
               <Typography variant="caption" sx={{ fontWeight: 'bold' }}>
                 {stage.title}
               </Typography>
               <br />
               <Typography variant="caption">
-                Status: {getStatusLabel(stage.status)}
+                {getStatusLabel(stage.status)}
               </Typography>
-              {modifiedBy && (
+              {stage.responsible_user?.full_name && (
                 <>
                   <br />
-                  <Typography variant="caption">Por: {modifiedBy}</Typography>
-                </>
-              )}
-              {modifiedDate && (
-                <>
-                  <br />
-                  <Typography variant="caption">{modifiedDate}</Typography>
+                  <Typography variant="caption">
+                    👤 {stage.responsible_user.full_name}
+                  </Typography>
                 </>
               )}
             </Box>
@@ -123,15 +150,34 @@ export default function LocationStageTimeline({
               <Tooltip title={tooltipContent} arrow>
                 <Chip
                   icon={getStatusIcon(stage.status)}
-                  label={stage.title}
+                  label={`${index + 1}`}
                   size="small"
                   color={getStatusColor(stage.status)}
                   variant={stage.status === 'completed' ? 'filled' : 'outlined'}
+                  onClick={
+                    onUpdateStage
+                      ? () =>
+                          onUpdateStage(
+                            stage.id,
+                            stage.status === 'completed'
+                              ? 'pending'
+                              : 'completed'
+                          )
+                      : undefined
+                  }
+                  onDelete={
+                    onDeleteStage ? () => onDeleteStage(stage.id) : undefined
+                  }
                   sx={{
-                    transition: 'all 0.2s',
-                    '&:hover': {
-                      transform: 'translateY(-2px)',
-                      boxShadow: 2,
+                    fontSize: 11,
+                    height: 24,
+                    cursor: onUpdateStage ? 'pointer' : 'default',
+                    '& .MuiChip-deleteIcon': {
+                      fontSize: 14,
+                      display: 'none',
+                    },
+                    '&:hover .MuiChip-deleteIcon': {
+                      display: 'block',
                     },
                   }}
                 />
@@ -140,12 +186,12 @@ export default function LocationStageTimeline({
               {index < sortedStages.length - 1 && (
                 <Box
                   sx={{
-                    width: 16,
+                    width: 8,
                     height: 2,
                     backgroundColor:
                       sortedStages[index + 1].status === 'completed'
                         ? '#4caf50'
-                        : '#e0e0e0',
+                        : '#404040',
                     alignSelf: 'center',
                   }}
                 />
@@ -155,28 +201,15 @@ export default function LocationStageTimeline({
         })}
       </Box>
 
-      <Box sx={{ mt: 2, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-        <Typography variant="caption" color="text.secondary">
-          {sortedStages.filter(s => s.status === 'completed').length} /{' '}
-          {sortedStages.length} concluídas
+      {stages.length > maxStages && (
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ mt: 0.5, display: 'block' }}
+        >
+          +{stages.length - maxStages} etapas ocultas
         </Typography>
-        {sortedStages.some(s => s.status === 'in_progress') && (
-          <Chip
-            label="Em andamento"
-            size="small"
-            color="warning"
-            sx={{ height: 20, fontSize: '0.7rem' }}
-          />
-        )}
-        {sortedStages.some(s => s.status === 'blocked') && (
-          <Chip
-            label="Bloqueada"
-            size="small"
-            color="error"
-            sx={{ height: 20, fontSize: '0.7rem' }}
-          />
-        )}
-      </Box>
+      )}
     </Box>
   );
 }

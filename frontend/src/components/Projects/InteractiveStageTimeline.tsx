@@ -182,138 +182,142 @@ export default function InteractiveStageTimeline({
         sx={{ mb: 3, height: 6, borderRadius: 3 }}
       />
 
-      {/* Timeline */}
-      <Box sx={{ position: 'relative', pl: 3 }}>
-        {/* Vertical Line */}
+      {/* Timeline Horizontal */}
+      <Box sx={{ position: 'relative', overflowX: 'auto', pb: 2 }}>
         <Box
           sx={{
-            position: 'absolute',
-            left: 11,
-            top: 12,
-            bottom: 12,
-            width: 2,
-            bgcolor: 'divider',
+            display: 'flex',
+            gap: 0,
+            minWidth: 'max-content',
+            position: 'relative',
           }}
-        />
+        >
+          {sortedStages.map((stage, index) => {
+            const isUpdating = updatingStageId === stage.id;
+            const modifiedDate = stage.status_changed_at
+              ? formatDistanceToNow(new Date(stage.status_changed_at), {
+                  addSuffix: true,
+                  locale: ptBR,
+                })
+              : null;
 
-        {sortedStages.map((stage, index) => {
-          const isUpdating = updatingStageId === stage.id;
-          const modifiedDate = stage.status_changed_at
-            ? formatDistanceToNow(new Date(stage.status_changed_at), {
-                addSuffix: true,
-                locale: ptBR,
-              })
-            : null;
+            const modifiedBy = stage.status_changed_by_user?.full_name;
 
-          const modifiedBy = stage.status_changed_by_user?.full_name;
-
-          return (
-            <Box
-              key={stage.id}
-              sx={{
-                position: 'relative',
-                mb: index < sortedStages.length - 1 ? 3 : 0,
-              }}
-            >
-              {/* Timeline Dot */}
-              <Box
-                sx={{
-                  position: 'absolute',
-                  left: -23,
-                  top: 4,
-                  width: 24,
-                  height: 24,
-                  borderRadius: '50%',
-                  bgcolor: 'background.paper',
-                  border: 2,
-                  borderColor:
-                    stage.status === StageStatus.COMPLETED
-                      ? 'success.main'
-                      : stage.status === StageStatus.IN_PROGRESS
-                      ? 'warning.main'
-                      : 'divider',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  zIndex: 1,
-                }}
-              >
-                {getStatusIcon(stage.status, 'small')}
-              </Box>
-
-              {/* Stage Content */}
-              <Box>
+            return (
+              <React.Fragment key={stage.id}>
+                {/* Stage Item */}
                 <Box
                   sx={{
                     display: 'flex',
+                    flexDirection: 'column',
                     alignItems: 'center',
-                    gap: 1,
-                    mb: 0.5,
+                    minWidth: 120,
+                    position: 'relative',
                   }}
                 >
-                  <Typography variant="body2" fontWeight="medium">
-                    {stage.title}
-                  </Typography>
-
-                  <Chip
-                    label={getStatusLabel(stage.status)}
-                    size="small"
-                    color={getStatusColor(stage.status)}
-                    variant={
-                      stage.status === StageStatus.COMPLETED
-                        ? 'filled'
-                        : 'outlined'
-                    }
-                    onClick={e => handleStageClick(e, stage.id)}
-                    disabled={isUpdating}
+                  {/* Timeline Dot */}
+                  <Box
                     sx={{
-                      cursor: 'pointer',
-                      transition: 'all 0.2s',
-                      '&:hover': {
-                        transform: 'scale(1.05)',
-                        boxShadow: 1,
-                      },
+                      width: 32,
+                      height: 32,
+                      borderRadius: '50%',
+                      bgcolor: 'background.paper',
+                      border: 3,
+                      borderColor:
+                        stage.status === StageStatus.COMPLETED
+                          ? 'success.main'
+                          : stage.status === StageStatus.IN_PROGRESS
+                          ? 'warning.main'
+                          : stage.status === StageStatus.SKIPPED
+                          ? 'grey.400'
+                          : 'divider',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      zIndex: 2,
+                      mb: 1,
                     }}
-                  />
-
-                  {stage.is_critical && (
-                    <Chip
-                      label="Crítica"
-                      size="small"
-                      color="error"
-                      variant="outlined"
-                    />
-                  )}
-                </Box>
-
-                {/* User Attribution */}
-                {(modifiedBy || modifiedDate) && (
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    sx={{ display: 'block' }}
                   >
-                    {modifiedBy && `Por: ${modifiedBy}`}
-                    {modifiedBy && modifiedDate && ' • '}
-                    {modifiedDate}
-                  </Typography>
-                )}
+                    {getStatusIcon(stage.status, 'small')}
+                  </Box>
 
-                {!modifiedBy &&
-                  !modifiedDate &&
-                  stage.status === StageStatus.PENDING && (
+                  {/* Stage Content */}
+                  <Box sx={{ textAlign: 'center', px: 1 }}>
                     <Typography
                       variant="caption"
-                      color="text.secondary"
-                      sx={{ fontStyle: 'italic' }}
+                      fontWeight="medium"
+                      sx={{ display: 'block', mb: 0.5 }}
                     >
-                      Clique no status para atualizar
+                      {stage.title}
                     </Typography>
-                  )}
-              </Box>
-            </Box>
-          );
-        })}
+
+                    <Chip
+                      label={getStatusLabel(stage.status)}
+                      size="small"
+                      color={getStatusColor(stage.status)}
+                      variant={
+                        stage.status === StageStatus.COMPLETED
+                          ? 'filled'
+                          : 'outlined'
+                      }
+                      onClick={e => handleStageClick(e, stage.id)}
+                      disabled={isUpdating}
+                      sx={{
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                        fontSize: '0.65rem',
+                        height: 20,
+                        '&:hover': {
+                          transform: 'scale(1.05)',
+                          boxShadow: 1,
+                        },
+                      }}
+                    />
+
+                    {/* User Attribution */}
+                    {(modifiedBy || modifiedDate) && (
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ display: 'block', mt: 0.5, fontSize: '0.65rem' }}
+                      >
+                        {modifiedBy && `${modifiedBy}`}
+                        {modifiedDate && (
+                          <Box
+                            component="span"
+                            sx={{ display: 'block', fontSize: '0.6rem' }}
+                          >
+                            {modifiedDate}
+                          </Box>
+                        )}
+                      </Typography>
+                    )}
+                  </Box>
+                </Box>
+
+                {/* Horizontal Connector Line */}
+                {index < sortedStages.length - 1 && (
+                  <Box
+                    sx={{
+                      alignSelf: 'flex-start',
+                      mt: '16px',
+                      height: 3,
+                      flex: '1 1 40px',
+                      minWidth: 40,
+                      maxWidth: 80,
+                      bgcolor:
+                        stage.status === StageStatus.COMPLETED
+                          ? 'success.main'
+                          : 'divider',
+                      position: 'relative',
+                      zIndex: 1,
+                    }}
+                  />
+                )}
+              </React.Fragment>
+            );
+          })}
+        </Box>
       </Box>
 
       {/* Status Selection Menu */}

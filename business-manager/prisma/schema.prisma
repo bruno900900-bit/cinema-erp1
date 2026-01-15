@@ -1,0 +1,123 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model Empresa {
+  id          Int      @id @default(autoincrement())
+  nome        String
+  descricao   String?
+  setor       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  custosFixos      CustoFixo[]
+  custosVariaveis  CustoVariavel[]
+  produtos         Produto[]
+  valuationConfig  ValuationConfig?
+  projecoes        ProjecaoAnual[]
+}
+
+model CustoFixo {
+  id            Int      @id @default(autoincrement())
+  empresaId     Int
+  nome          String
+  valor         Float
+  periodicidade String   @default("mensal") // mensal, anual, semanal
+  descricao     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+}
+
+model CustoVariavel {
+  id            Int      @id @default(autoincrement())
+  empresaId     Int
+  nome          String
+  valorUnitario Float
+  unidade       String   @default("unidade") // unidade, kg, litro, hora
+  descricao     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+}
+
+model Produto {
+  id          Int      @id @default(autoincrement())
+  empresaId   Int
+  nome        String
+  descricao   String?
+  precoCusto  Float    @default(0) // Calculado automaticamente das etapas
+  precoVenda  Float
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  empresa Empresa          @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  etapas  EtapaProducao[]
+}
+
+model EtapaProducao {
+  id        Int      @id @default(autoincrement())
+  produtoId Int
+  nome      String
+  ordem     Int
+  custo     Float
+  descricao String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  produto Produto @relation(fields: [produtoId], references: [id], onDelete: Cascade)
+}
+
+// === SISTEMA DE VALUATION ===
+
+model ValuationConfig {
+  id              Int      @id @default(autoincrement())
+  empresaId       Int      @unique
+  receitaMensal   Float    @default(0)    // Receita mensal estimada
+  taxaDesconto    Float    @default(0.15) // WACC ou taxa de retorno (15%)
+  taxaCrescimento Float    @default(0.10) // Crescimento anual (10%)
+  anosProjecao    Int      @default(5)    // Anos para DCF
+  multiploManual  Float?                  // Múltiplo customizado
+  metodoPreferido String   @default("ebitda") // dcf, ebitda, receita
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+}
+
+model ProjecaoAnual {
+  id               Int      @id @default(autoincrement())
+  empresaId        Int
+  ano              Int
+  mes              Int      @default(0) // 0 = anual, 1-12 = mensal
+  receitaProjetada Float
+  custosProjetados Float
+  lucroProjetado   Float
+  ebitdaProjetado  Float
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  @@unique([empresaId, ano, mes])
+}
+
+model MultiploSetor {
+  id                  Int    @id @default(autoincrement())
+  setor               String @unique
+  multiploEbitdaMin   Float
+  multiploEbitdaMax   Float
+  multiploReceitaMin  Float
+  multiploReceitaMax  Float
+  descricao           String?
+}

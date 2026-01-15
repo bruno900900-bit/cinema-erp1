@@ -8,6 +8,9 @@ from .notifications import router as notifications_router
 from .custom_filters import router as custom_filters_router
 from .project_locations import router as project_locations_router
 from .project_location_stages import router as project_location_stages_router
+from .project_visit_locations import router as project_visit_locations_router
+from .project_stages import router as project_stages_router
+from .location_demands import router as location_demands_router
 from . import auth
 
 __all__ = [
@@ -21,5 +24,8 @@ __all__ = [
     "custom_filters_router",
     "project_locations_router",
     "project_location_stages_router",
+    "project_visit_locations_router",
+    "project_stages_router",
+    "location_demands_router",
     "auth"
 ]

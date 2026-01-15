@@ -11,12 +11,16 @@ class ProjectStageStatus(str, enum.Enum):
     CANCELLED = "cancelled"
 
 class ProjectStageType(str, enum.Enum):
-    PLANNING = "planning"
-    PRE_PRODUCTION = "pre_production"
-    PRODUCTION = "production"
-    POST_PRODUCTION = "post_production"
-    DELIVERY = "delivery"
-    CUSTOM = "custom"
+    PLANNING = "planning"  # Planejamento inicial
+    PRE_PRODUCTION = "pre_production"  # Pré-Produção
+    LOCATION_SEARCH = "location_search"  # Busca de Locações
+    LOCATION_APPROVAL = "location_approval"  # Aprovação de Locações
+    TECHNICAL_VISIT = "technical_visit"  # Visita Técnica
+    PREPARATION = "preparation"  # Preparação
+    PRODUCTION = "production"  # Produção/Filmagem
+    POST_PRODUCTION = "post_production"  # Pós-Produção
+    DELIVERY = "delivery"  # Entrega Final
+    CUSTOM = "custom"  # Etapa customizada
 
 class ProjectStage(Base, TimestampMixin):
     __tablename__ = "project_stages"

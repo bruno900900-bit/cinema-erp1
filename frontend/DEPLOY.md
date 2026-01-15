@@ -28,7 +28,7 @@
 **Production Environment:**
 
 ```
-VITE_SUPABASE_URL=https://rwpmtuohcvnciemtsjge.supabase.co
+VITE_SUPABASE_URL=https://mjrjjslawywdcgvaxtzv.supabase.co
 VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ3cG10dW9oY3ZuY2llbXRzamdlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUzMTM1NzYsImV4cCI6MjA4MDg4OTU3Nn0.Wpkkzef7vTKQGQ5CZX41-qXHoQu4r_r67lK-fmvWQV8
 VITE_APP_ENV=production
 ```

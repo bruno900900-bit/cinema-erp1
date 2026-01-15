@@ -187,7 +187,7 @@ class ProjectLocationStageService {
   }
 
   /**
-   * Cria etapas padrão para uma locação
+   * Cria etapas padrão para uma locação - APENAS 7 ETAPAS
    */
   async createDefaultStages(
     projectLocationId: number
@@ -195,122 +195,78 @@ class ProjectLocationStageService {
     const { data, error } = await supabase
       .from('project_location_stages')
       .insert([
-        // Prospecção
+        // 1. Prospecção
         {
           project_location_id: projectLocationId,
           stage_type: 'prospeccao',
           title: 'Prospecção',
-          description: 'Busca e identificação inicial da locação',
+          description: 'Identificação e pesquisa do local',
           status: 'pending',
           weight: 1.0,
           is_milestone: false,
           is_critical: false,
         },
-        // Visitação
+        // 2. Visita Inicial
         {
           project_location_id: projectLocationId,
           stage_type: 'visitacao',
-          title: 'Visitação Inicial',
-          description: 'Primeira visita ao local para avaliação geral',
+          title: 'Visita Inicial',
+          description: 'Primeira visita ao local',
           status: 'pending',
           weight: 1.5,
           is_milestone: true,
           is_critical: true,
         },
-        // Avaliação Técnica
+        // 3. Avaliação Técnica
         {
           project_location_id: projectLocationId,
           stage_type: 'avaliacao_tecnica',
           title: 'Avaliação Técnica',
-          description: 'Avaliação técnica detalhada do local',
+          description: 'Análise de infraestrutura',
           status: 'pending',
           weight: 1.5,
           is_milestone: false,
           is_critical: true,
         },
-        // Aprovação Cliente
-        {
-          project_location_id: projectLocationId,
-          stage_type: 'aprovacao_cliente',
-          title: 'Aprovação do Cliente',
-          description: 'Apresentação e aprovação pelo cliente',
-          status: 'pending',
-          weight: 2.0,
-          is_milestone: true,
-          is_critical: true,
-        },
-        // Negociação
+        // 4. Negociação
         {
           project_location_id: projectLocationId,
           stage_type: 'negociacao',
           title: 'Negociação',
-          description: 'Negociação de preços e condições',
+          description: 'Negociação de valores',
           status: 'pending',
           weight: 2.0,
           is_milestone: false,
           is_critical: true,
         },
-        // Contratação
+        // 5. Aprovação
+        {
+          project_location_id: projectLocationId,
+          stage_type: 'aprovacao_cliente',
+          title: 'Aprovação',
+          description: 'Aprovação final',
+          status: 'pending',
+          weight: 2.0,
+          is_milestone: true,
+          is_critical: true,
+        },
+        // 6. Contrato
         {
           project_location_id: projectLocationId,
           stage_type: 'contratacao',
-          title: 'Contratação',
+          title: 'Contrato',
           description: 'Assinatura do contrato',
           status: 'pending',
           weight: 1.5,
           is_milestone: true,
           is_critical: true,
         },
-        // Preparação
-        {
-          project_location_id: projectLocationId,
-          stage_type: 'preparacao',
-          title: 'Preparação',
-          description: 'Preparação do local para gravação',
-          status: 'pending',
-          weight: 1.0,
-          is_milestone: false,
-          is_critical: false,
-        },
-        // Setup
-        {
-          project_location_id: projectLocationId,
-          stage_type: 'setup',
-          title: 'Setup e Montagem',
-          description: 'Montagem de equipamentos',
-          status: 'pending',
-          weight: 1.0,
-          is_milestone: false,
-          is_critical: false,
-        },
-        // Gravação
-        {
-          project_location_id: projectLocationId,
-          stage_type: 'gravacao',
-          title: 'Gravação/Filmagem',
-          description: 'Período de gravação',
-          status: 'pending',
-          weight: 3.0,
-          is_milestone: true,
-          is_critical: true,
-        },
-        // Desmontagem
-        {
-          project_location_id: projectLocationId,
-          stage_type: 'desmontagem',
-          title: 'Desmontagem',
-          description: 'Desmontagem e limpeza',
-          status: 'pending',
-          weight: 1.0,
-          is_milestone: false,
-          is_critical: false,
-        },
-        // Entrega
+        // 7. Liberação
         {
           project_location_id: projectLocationId,
           stage_type: 'entrega',
-          title: 'Entrega Final',
-          description: 'Entrega do local',
+          title: 'Liberação',
+          description: 'Liberação para filmagem',
           status: 'pending',
           weight: 1.5,
           is_milestone: true,

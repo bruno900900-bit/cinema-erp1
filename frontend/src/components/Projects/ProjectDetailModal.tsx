@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -10,59 +10,17 @@ import {
   Typography,
   Card,
   CardContent,
-  CardActions,
   Chip,
-  LinearProgress,
   IconButton,
   Tooltip,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemIcon,
-  Divider,
-  Alert,
-  CircularProgress,
-  Badge,
   Tabs,
   Tab,
 } from '@mui/material';
-import {
-  Close,
-  ExpandMore,
-  CheckCircle,
-  RadioButtonUnchecked,
-  PauseCircle,
-  Cancel,
-  Add,
-  Edit,
-  Delete,
-  LocationOn,
-  Schedule,
-  AttachMoney,
-  Person,
-  Warning,
-  CheckCircleOutline,
-  Timeline,
-  Flag,
-  PlayArrow,
-  Pause,
-  Settings,
-} from '@mui/icons-material';
-import {
-  Project,
-  Location,
-  ProjectLocation,
-  ProjectLocationStage,
-} from '../../types/user';
-import { projectLocationStageService } from '../../services/projectLocationStageService';
-import { projectLocationService } from '../../services/projectLocationService';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Close, Settings } from '@mui/icons-material';
+import { Project, ProjectLocation } from '../../types/user';
+import { useQueryClient } from '@tanstack/react-query';
 import ProjectLocationManager from './ProjectLocationManager';
-import LocationStagesProgress from './LocationStagesProgress';
-import ProjectLocationStagesManager from './ProjectLocationStagesManager';
+import { LocationDemandsPanel } from '../Demands';
 import ProjectSettingsManager from './ProjectSettingsManager';
 import { formatDateBR } from '../../utils/date';
 
@@ -86,115 +44,6 @@ export default function ProjectDetailModal({
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const queryClient = useQueryClient();
 
-  // Reativar as queries que estão desabilitadas
-  const {
-    data: stagesSummary,
-    isLoading: isLoadingSummary,
-    error: stagesSummaryError,
-  } = useQuery<ProjectLocationStagesSummary>({
-    queryKey: ['project-stages-summary', project?.id],
-    queryFn: () =>
-      projectLocationStageService.getProjectStagesSummary(Number(project!.id)),
-    enabled: !!project?.id, // Reativar quando houver projeto
-    retry: 1, // Reduzir tentativas de retry
-    staleTime: 5 * 60 * 1000, // Cache por 5 minutos
-  });
-
-  const {
-    data: allStages,
-    isLoading: isLoadingStages,
-    error: allStagesError,
-  } = useQuery<ProjectLocationStage[]>({
-    queryKey: ['project-stages', project?.id],
-    queryFn: () =>
-      projectLocationStageService.getStagesByProject(Number(project!.id)),
-    enabled: !!project?.id, // Reativar quando houver projeto
-    retry: 1,
-    staleTime: 5 * 60 * 1000,
-  });
-
-  // Mutation para atualizar status da etapa (desabilitado temporariamente)
-  const updateStageStatusMutation = useMutation({
-    mutationFn: ({
-      stageId,
-      status,
-      notes,
-    }: {
-      stageId: number;
-      status: string;
-      notes?: string;
-    }) => projectLocationStageService.updateStageStatus(stageId, status, notes),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ['project-stages-summary', project?.id],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['project-stages', project?.id],
-      });
-    },
-  });
-
-  // Mutation para criar etapas padrão (desabilitado temporariamente)
-  const createDefaultStagesMutation = useMutation({
-    mutationFn: ({
-      projectId,
-      locationId,
-    }: {
-      projectId: number;
-      locationId: number;
-    }) =>
-      projectLocationStageService.createDefaultStagesForLocation(
-        projectId,
-        locationId
-      ),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ['project-stages-summary', project?.id],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['project-stages', project?.id],
-      });
-    },
-  });
-
-  const handleStageStatusUpdate = (
-    stageId: number,
-    newStatus: string,
-    notes?: string
-  ) => {
-    updateStageStatusMutation.mutate({ stageId, status: newStatus, notes });
-  };
-
-  const handleCreateDefaultStages = (locationId: number) => {
-    if (project) {
-      createDefaultStagesMutation.mutate({
-        projectId: Number(project.id),
-        locationId,
-      });
-    }
-  };
-
-  const getStagesByLocation = (locationId: number): ProjectLocationStage[] => {
-    return allStages?.filter(stage => stage.location_id === locationId) || [];
-  };
-
-  const getStageIcon = (status: string) => {
-    switch (status) {
-      case 'completed':
-      case 'approved':
-        return <CheckCircle color="success" />;
-      case 'in_progress':
-        return <RadioButtonUnchecked color="primary" />;
-      case 'on_hold':
-        return <PauseCircle color="warning" />;
-      case 'cancelled':
-      case 'rejected':
-        return <Cancel color="error" />;
-      default:
-        return <RadioButtonUnchecked color="disabled" />;
-    }
-  };
-
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -206,21 +55,6 @@ export default function ProjectDetailModal({
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
-  };
-
-  const handleStageUpdate = async (
-    stageId: number,
-    updates: Partial<ProjectLocationStage>
-  ) => {
-    try {
-      await projectLocationStageService.updateStage(stageId, updates);
-      // Recarregar os dados após a atualização
-      queryClient.invalidateQueries(['project-stages-summary', project?.id]);
-      queryClient.invalidateQueries(['project-stages', project?.id]);
-      queryClient.invalidateQueries(['projects']);
-    } catch (error) {
-      console.error('Erro ao atualizar etapa:', error);
-    }
   };
 
   if (!project || !project.title) {
@@ -339,7 +173,7 @@ export default function ProjectDetailModal({
             aria-label="project details tabs"
           >
             <Tab label="Locações" />
-            <Tab label="Etapas" />
+            <Tab label="Demandas" />
           </Tabs>
         </Box>
 
@@ -358,104 +192,10 @@ export default function ProjectDetailModal({
 
         {tabValue === 1 && (
           <Box sx={{ p: 3 }}>
-            {/* Resumo do Progresso Geral */}
-            {stagesSummaryError && (
-              <Alert severity="error" sx={{ mb: 2 }}>
-                Erro ao carregar resumo das etapas: {stagesSummaryError.message}
-              </Alert>
-            )}
-            {isLoadingSummary ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-                <CircularProgress />
-                <Typography variant="body2" sx={{ ml: 2 }}>
-                  Carregando dados das etapas...
-                </Typography>
-              </Box>
-            ) : stagesSummary ? (
-              <Card sx={{ mb: 3 }}>
-                <CardContent>
-                  <Typography variant="h6" gutterBottom>
-                    <Timeline sx={{ mr: 1, verticalAlign: 'middle' }} />
-                    Resumo Geral das Etapas
-                  </Typography>
-                  <Grid container spacing={2}>
-                    <Grid item xs={12} sm={6} md={3}>
-                      <Box sx={{ textAlign: 'center' }}>
-                        <Typography variant="h4" color="primary">
-                          {stagesSummary.total_stages}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          Total de Etapas
-                        </Typography>
-                      </Box>
-                    </Grid>
-                    <Grid item xs={12} sm={6} md={3}>
-                      <Box sx={{ textAlign: 'center' }}>
-                        <Typography variant="h4" color="success.main">
-                          {stagesSummary.completed_stages}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          Concluídas
-                        </Typography>
-                      </Box>
-                    </Grid>
-                    <Grid item xs={12} sm={6} md={3}>
-                      <Box sx={{ textAlign: 'center' }}>
-                        <Typography variant="h4" color="info.main">
-                          {stagesSummary.in_progress_stages}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          Em Andamento
-                        </Typography>
-                      </Box>
-                    </Grid>
-                    <Grid item xs={12} sm={6} md={3}>
-                      <Box sx={{ textAlign: 'center' }}>
-                        <Typography variant="h4" color="warning.main">
-                          {stagesSummary.overdue_stages}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          Atrasadas
-                        </Typography>
-                      </Box>
-                    </Grid>
-                  </Grid>
-                  <Box sx={{ mt: 2 }}>
-                    <Typography variant="body2" gutterBottom>
-                      Progresso Geral:{' '}
-                      {stagesSummary.overall_progress.toFixed(1)}%
-                    </Typography>
-                    <LinearProgress
-                      variant="determinate"
-                      value={stagesSummary.overall_progress}
-                      sx={{ height: 8, borderRadius: 4 }}
-                    />
-                  </Box>
-                </CardContent>
-              </Card>
-            ) : null}
-
-            {/* Progresso das Locações */}
-            <Typography variant="h6" gutterBottom>
-              Progresso por Locação
-            </Typography>
-
-            {project.locations &&
-            Array.isArray(project.locations) &&
-            project.locations.length > 0 ? (
-              project.locations.map(projectLocation => (
-                <LocationStagesProgress
-                  key={projectLocation.id}
-                  projectLocation={projectLocation}
-                  onStageUpdate={handleStageUpdate}
-                  compact={false}
-                />
-              ))
-            ) : (
-              <Alert severity="info">
-                Nenhuma locação adicionada ao projeto ainda.
-              </Alert>
-            )}
+            <LocationDemandsPanel
+              projectId={parseInt(project.id)}
+              projectLocations={project.locations || []}
+            />
           </Box>
         )}
       </DialogContent>

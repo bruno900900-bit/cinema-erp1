@@ -23,6 +23,11 @@ from .project_location_stage_history import ProjectLocationStageHistory
 from .project_location import ProjectLocation, RentalStatus
 from .agenda_event import AgendaEvent, EventType, EventStatus
 from .user_project import UserProject, ProjectAccessLevel
+from .project_visit_location import ProjectVisitLocation, VisitLocationStatus
+from .project_visit_photo import ProjectVisitPhoto, PhotoComment
+from .project_visit_workflow import ProjectVisitWorkflowStage, WorkflowStageStatus
+from .project_location_photo import ProjectLocationPhoto, ProjectLocationPhotoComment
+from .location_demand import LocationDemand, DemandPriority, DemandStatus
 
 __all__ = [
     "Base",
@@ -48,5 +53,11 @@ __all__ = [
     "ProjectLocationStageHistory",
     "ProjectLocation", "RentalStatus",
     "AgendaEvent", "EventType", "EventStatus",
-    "StageTask"
+    "StageTask",
+    "ProjectVisitLocation", "VisitLocationStatus",
+    "ProjectVisitPhoto", "PhotoComment",
+    "ProjectVisitWorkflowStage", "WorkflowStageStatus",
+    "ProjectLocationPhoto", "ProjectLocationPhotoComment",
+    "UserProject", "ProjectAccessLevel",
+    "LocationDemand", "DemandPriority", "DemandStatus"
 ]

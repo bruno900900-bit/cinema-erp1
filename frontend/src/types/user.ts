@@ -51,6 +51,46 @@ export enum UserRole {
   CONTRIBUTOR = 'contributor',
 }
 
+// Types for user operations
+export interface UserCreate {
+  email: string;
+  full_name: string;
+  password?: string;
+  role?: UserRole;
+  phone?: string;
+  bio?: string;
+  permissions_json?: Record<string, boolean>;
+}
+
+export interface UserUpdate {
+  email?: string;
+  full_name?: string;
+  role?: UserRole;
+  phone?: string;
+  bio?: string;
+  is_active?: boolean;
+  permissions_json?: Record<string, unknown>;
+  avatar_url?: string;
+}
+
+export interface UserPasswordChange {
+  current_password: string;
+  new_password: string;
+}
+
+export interface UserBulkAction {
+  user_ids: number[];
+  action: 'activate' | 'deactivate' | 'delete' | 'change_role';
+  role?: UserRole;
+}
+
+export interface UserStats {
+  total_users: number;
+  active_users: number;
+  inactive_users: number;
+  role_distribution: Record<string, number>;
+}
+
 export interface Permissions {
   canViewDashboard: boolean;
   canManageUsers: boolean;

@@ -51,6 +51,7 @@ import {
 } from '../services/contractService';
 import { supplierService } from '../services/supplierService';
 import { userService } from '../services/userService';
+import { projectService } from '../services/projectService';
 import ContractGenerationModal from '../components/Contracts/ContractGenerationModal';
 
 const ContractsPage: React.FC = () => {
@@ -61,8 +62,10 @@ const ContractsPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isPreviewDialogOpen, setIsPreviewDialogOpen] = useState(false);
+  const [isProjectSelectOpen, setIsProjectSelectOpen] = useState(false);
   const [selectedContract, setSelectedContract] =
     useState<GeneratedContract | null>(null);
+  const [selectedProject, setSelectedProject] = useState<any>(null);
 
   // Simular dados de contratos (em um sistema real, isso viria do backend)
   const mockContracts: GeneratedContract[] = [
@@ -107,6 +110,12 @@ const ContractsPage: React.FC = () => {
   const { data: usersResponse } = useQuery({
     queryKey: ['users'],
     queryFn: () => userService.getUsers(),
+  });
+
+  // Buscar projetos com locações
+  const { data: projects = [] } = useQuery({
+    queryKey: ['projects'],
+    queryFn: projectService.getProjects,
   });
 
   const suppliers = suppliersResponse?.suppliers || [];
@@ -195,7 +204,7 @@ const ContractsPage: React.FC = () => {
         <Button
           variant="contained"
           startIcon={<AddIcon />}
-          onClick={() => setIsCreateDialogOpen(true)}
+          onClick={() => setIsProjectSelectOpen(true)}
         >
           Novo Contrato
         </Button>
@@ -410,11 +419,72 @@ const ContractsPage: React.FC = () => {
         />
       </Paper>
 
+      {/* Dialog de Seleção de Projeto */}
+      <Dialog
+        open={isProjectSelectOpen}
+        onClose={() => setIsProjectSelectOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Typography variant="h6">Selecione um Projeto</Typography>
+        </DialogTitle>
+        <DialogContent>
+          <Alert severity="info" sx={{ mb: 2 }}>
+            Selecione um projeto para gerar o contrato baseado nas locações e
+            fornecedores cadastrados.
+          </Alert>
+          <FormControl fullWidth sx={{ mt: 1 }}>
+            <InputLabel>Projeto</InputLabel>
+            <Select
+              value={selectedProject?.id || ''}
+              onChange={e => {
+                const proj = projects.find((p: any) => p.id === e.target.value);
+                setSelectedProject(proj);
+              }}
+              label="Projeto"
+            >
+              <MenuItem value="">
+                <em>Nenhum (Contrato Manual)</em>
+              </MenuItem>
+              {projects.map((project: any) => (
+                <MenuItem key={project.id} value={project.id}>
+                  📁 {project.title || project.name}
+                  {(project.locations?.length ||
+                    project.project_locations?.length) > 0 &&
+                    ` (${
+                      project.locations?.length ||
+                      project.project_locations?.length
+                    } locações)`}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setIsProjectSelectOpen(false)}>
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            onClick={() => {
+              setIsProjectSelectOpen(false);
+              setIsCreateDialogOpen(true);
+            }}
+          >
+            Continuar
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* Modal de Geração de Contratos */}
       <ContractGenerationModal
         open={isCreateDialogOpen}
-        onClose={() => setIsCreateDialogOpen(false)}
-        project={null}
+        onClose={() => {
+          setIsCreateDialogOpen(false);
+          setSelectedProject(null);
+        }}
+        project={selectedProject}
         suppliers={suppliers}
         users={users}
       />
@@ -468,38 +538,3 @@ const ContractsPage: React.FC = () => {
 };
 
 export default ContractsPage;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

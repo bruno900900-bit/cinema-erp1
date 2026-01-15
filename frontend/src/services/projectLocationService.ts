@@ -29,6 +29,26 @@ export interface ProjectLocation {
   // Computed/UI fields
   total_days?: number;
   total_hours?: number;
+  // Joined relations from Supabase
+  location?: {
+    id: number;
+    title?: string;
+    city?: string;
+    state?: string;
+    photos?: Array<{
+      id: number;
+      url?: string;
+      file_path?: string;
+      caption?: string;
+    }>;
+  };
+  stages?: any[];
+  project_photos?: Array<{
+    id: number;
+    url?: string;
+    file_path?: string;
+    caption?: string;
+  }>;
 }
 
 export interface ProjectLocationCreate {

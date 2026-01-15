@@ -1,7 +1,7 @@
 // Script para criar tabela agenda_events via Supabase SQL
 const https = require('https');
 
-const SUPABASE_URL = 'rwpmtuohcvnciemtsjge.supabase.co';
+const SUPABASE_URL = 'mjrjjslawywdcgvaxtzv.supabase.co';
 const SERVICE_ROLE_KEY =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ3cG10dW9oY3ZuY2llbXRzamdlIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NTMxMzU3NiwiZXhwIjoyMDgwODg5NTc2fQ.d1c1WPyOtRBkJ1E3DwYUtoQ7FUJ0iSGA14dokqx_8ww';
 

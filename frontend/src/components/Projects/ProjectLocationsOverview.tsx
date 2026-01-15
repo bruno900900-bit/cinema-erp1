@@ -726,71 +726,6 @@ export default function ProjectLocationsOverview({
                             {location.notes || 'Nenhuma nota adicionada.'}
                           </Typography>
                         </Grid>
-
-                        {/* Etapas do Processo */}
-                        <Grid item xs={12}>
-                          <Divider sx={{ my: 2 }} />
-                          <Typography
-                            variant="subtitle2"
-                            gutterBottom
-                            sx={{ mb: 2 }}
-                          >
-                            📋 Etapas do Processo
-                          </Typography>
-                          {location.stages && location.stages.length > 0 ? (
-                            <SimpleStageList stages={location.stages} />
-                          ) : (
-                            <Paper
-                              sx={{
-                                p: 3,
-                                textAlign: 'center',
-                                backgroundColor: 'background.default',
-                                borderRadius: 2,
-                              }}
-                            >
-                              <Schedule
-                                sx={{
-                                  fontSize: 40,
-                                  color: 'text.secondary',
-                                  mb: 1,
-                                }}
-                              />
-                              <Typography
-                                variant="body2"
-                                color="text.secondary"
-                                gutterBottom
-                              >
-                                Nenhuma etapa cadastrada ainda
-                              </Typography>
-                              <Button
-                                variant="outlined"
-                                size="small"
-                                startIcon={<Add />}
-                                sx={{ mt: 1 }}
-                                onClick={async () => {
-                                  try {
-                                    await projectLocationStageService.createDefaultStages(
-                                      location.id
-                                    );
-                                    queryClient.invalidateQueries({
-                                      queryKey: [
-                                        'project-locations',
-                                        projectId,
-                                      ],
-                                    });
-                                  } catch (error) {
-                                    console.error(
-                                      'Erro ao criar etapas:',
-                                      error
-                                    );
-                                  }
-                                }}
-                              >
-                                Criar Etapas Padrão
-                              </Button>
-                            </Paper>
-                          )}
-                        </Grid>
                       </Grid>
                     </Box>
                   )}
@@ -819,65 +754,9 @@ export default function ProjectLocationsOverview({
         <DialogContent dividers>
           {selectedLocation && (
             <Box>
-              <Typography variant="h6" gutterBottom>
-                Etapas do Processo
+              <Typography variant="body1" color="text.secondary">
+                Use a Timeline na página de locações para ver o progresso.
               </Typography>
-              {selectedLocation.stages && selectedLocation.stages.length > 0 ? (
-                <SimpleStageList stages={selectedLocation.stages} />
-              ) : (
-                <Paper
-                  sx={{
-                    p: 3,
-                    textAlign: 'center',
-                    backgroundColor: 'action.hover',
-                    borderRadius: 2,
-                  }}
-                >
-                  <Schedule
-                    sx={{ fontSize: 48, color: 'text.secondary', mb: 1 }}
-                  />
-                  <Typography
-                    variant="body1"
-                    color="text.secondary"
-                    gutterBottom
-                  >
-                    Nenhuma etapa cadastrada ainda
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    As etapas do processo serão exibidas aqui quando forem
-                    criadas
-                  </Typography>
-                  <Button
-                    variant="contained"
-                    startIcon={<Add />}
-                    onClick={async () => {
-                      if (!selectedLocation) return;
-                      try {
-                        await projectLocationStageService.createDefaultStages(
-                          selectedLocation.id
-                        );
-                        // Invalidar cache do React Query para refresh automático
-                        queryClient.invalidateQueries({
-                          queryKey: ['project-locations'],
-                        });
-                        queryClient.invalidateQueries({
-                          queryKey: ['project-stages'],
-                        });
-                        // Fechar e reabrir dialog
-                        setDetailDialogOpen(false);
-                        setTimeout(() => {
-                          setDetailDialogOpen(true);
-                        }, 300);
-                      } catch (error) {
-                        console.error('Erro ao criar etapas:', error);
-                      }
-                    }}
-                    sx={{ mt: 2 }}
-                  >
-                    Criar Etapas Padrão
-                  </Button>
-                </Paper>
-              )}
             </Box>
           )}
         </DialogContent>

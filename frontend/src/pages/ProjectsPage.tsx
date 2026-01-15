@@ -359,6 +359,83 @@ const ProjectsPage: React.FC = () => {
   // Safer formatter for possibly string/null dates
   const formatDate = (date: any) => formatDateBR(date);
 
+  // Export function for locations
+  const handleExportLocations = () => {
+    // Collect all locations from all projects
+    const allLocations: any[] = [];
+
+    projects.forEach(project => {
+      if (project.locations && project.locations.length > 0) {
+        project.locations.forEach((loc: any) => {
+          // Only include confirmed locations
+          if (
+            loc.status === 'confirmed' ||
+            loc.status === 'in_use' ||
+            loc.status === 'completed'
+          ) {
+            const responsibleUser = users.find(
+              u => u.id.toString() === loc.responsible_user_id?.toString()
+            );
+            allLocations.push({
+              projeto: project.title,
+              locacao: loc.location?.title || loc.title || 'Sem nome',
+              valor_diaria: loc.daily_rate || 0,
+              valor_total: loc.total_cost || 0,
+              responsavel: responsibleUser?.full_name || 'N/A',
+              proprietario: loc.location?.owner_name || loc.owner_name || 'N/A',
+              nota: loc.notes || '',
+            });
+          }
+        });
+      }
+    });
+
+    if (allLocations.length === 0) {
+      toast.warning('Nenhuma locação confirmada encontrada para exportar.');
+      return;
+    }
+
+    // Generate CSV
+    const headers = [
+      'Projeto',
+      'Locação',
+      'Valor da Diária',
+      'Valor Total',
+      'Nome do Responsável',
+      'Nome do Proprietário',
+      'Nota',
+    ];
+    const csvRows = [
+      headers.join(';'),
+      ...allLocations.map(loc =>
+        [
+          `"${loc.projeto}"`,
+          `"${loc.locacao}"`,
+          loc.valor_diaria.toFixed(2).replace('.', ','),
+          loc.valor_total.toFixed(2).replace('.', ','),
+          `"${loc.responsavel}"`,
+          `"${loc.proprietario}"`,
+          `"${loc.nota.replace(/"/g, '""')}"`,
+        ].join(';')
+      ),
+    ];
+
+    const csvContent = '\uFEFF' + csvRows.join('\n'); // BOM for Excel UTF-8
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `locacoes_confirmadas_${
+      new Date().toISOString().split('T')[0]
+    }.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    toast.success(`${allLocations.length} locações exportadas com sucesso!`);
+  };
+
   if (projectsLoading || usersLoading || tagsLoading || locationsLoading) {
     return <LoadingSpinner />;
   }
@@ -668,8 +745,13 @@ const ProjectsPage: React.FC = () => {
                   Ações
                 </Typography>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  <Button variant="outlined" startIcon={<Download />} fullWidth>
-                    Exportar Relatório
+                  <Button
+                    variant="outlined"
+                    startIcon={<Download />}
+                    fullWidth
+                    onClick={handleExportLocations}
+                  >
+                    Exportar Locações (CSV)
                   </Button>
                   <Button variant="outlined" startIcon={<Upload />} fullWidth>
                     Importar Dados

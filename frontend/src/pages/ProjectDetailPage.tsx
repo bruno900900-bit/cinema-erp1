@@ -46,6 +46,9 @@ import ProjectBudgetDashboard from '@/components/Projects/ProjectBudgetDashboard
 import LocationSelectionModal from '@/components/Projects/LocationSelectionModal';
 import ProjectReportModal from '@/components/Projects/ProjectReportModal';
 import ProjectWorkflowPanel from '@/components/Projects/ProjectWorkflowPanel';
+import ProjectVisitLocationsPanel from '@/components/Projects/ProjectVisitLocationsPanel';
+import ProjectTimelineHub from '@/components/Projects/ProjectTimelineHub';
+import ProjectPhotosGallery from '@/components/Projects/ProjectPhotosGallery';
 import ProjectQuickActions from '@/components/Projects/ProjectQuickActions';
 import { formatDateBR, toInputDate } from '@/utils/date';
 import { toast } from 'react-toastify';
@@ -560,10 +563,38 @@ const ProjectDetailPage: React.FC = () => {
             />
           </Paper>
 
-          {/* Workflow Panel */}
-          <Box sx={{ mb: 3 }}>
-            <ProjectWorkflowPanel project={project} projectId={projectId!} />
-          </Box>
+          {/* Timeline Hub - Temporarily disabled for debugging */}
+          {/* <Box sx={{ mb: 3 }}>
+            <ProjectTimelineHub
+              projectId={
+                typeof project.id === 'number'
+                  ? project.id
+                  : parseInt(project.id)
+              }
+            />
+          </Box> */}
+
+          {/* Galeria de Fotos - Temporarily disabled for debugging */}
+          {/* <Box sx={{ mb: 3 }}>
+            <ProjectPhotosGallery
+              projectId={
+                typeof project.id === 'number'
+                  ? project.id
+                  : parseInt(project.id)
+              }
+            />
+          </Box> */}
+
+          {/* Locações Visitadas */}
+          <Paper sx={{ p: 0, mb: 3 }}>
+            <ProjectVisitLocationsPanel
+              projectId={
+                typeof project.id === 'number'
+                  ? project.id
+                  : parseInt(project.id)
+              }
+            />
+          </Paper>
 
           {/* Dashboard de Orçamento (Expandido) */}
           <Collapse in={showBudgetDashboard}>

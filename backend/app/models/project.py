@@ -70,6 +70,8 @@ class Project(Base, TimestampMixin):
     stages = relationship("ProjectStage", back_populates="project", cascade="all, delete-orphan")
     tasks = relationship("ProjectTask", back_populates="project", cascade="all, delete-orphan")
     project_tags = relationship("ProjectTag", back_populates="project", cascade="all, delete-orphan")
+    visit_locations = relationship("ProjectVisitLocation", back_populates="project", cascade="all, delete-orphan")
+    demands = relationship("LocationDemand", back_populates="project", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Project(id={self.id}, name='{self.name}', status='{self.status}', budget_remaining={self.budget_remaining})>"

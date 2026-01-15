@@ -337,11 +337,22 @@ const AgendaPage: React.FC = () => {
   // Handler para salvar evento - CONECTADO AO SUPABASE
   const handleSaveEvent = async (eventData: Partial<AgendaEvent>) => {
     try {
+      // Mapear tipo do modal para enum válido do PostgreSQL
+      const typeMapping: Record<string, EventType> = {
+        project: EventType.PROJECT_CREATED,
+        location: EventType.LOCATION_RENTAL_START,
+        task: EventType.CUSTOM,
+        visit: EventType.VISIT_SCHEDULED,
+      };
+
+      const mappedEventType =
+        typeMapping[eventData.type as string] || EventType.CUSTOM;
+
       // Mapear dados do formulário para o formato da API
       const apiEventData: AgendaEventCreate = {
         title: eventData.title || 'Novo Evento',
         description: eventData.description,
-        event_type: EventType.OTHER,
+        event_type: mappedEventType,
         status: EventStatus.SCHEDULED,
         // ✅ CORRIGIDO: usar start_date ao invés de event_date
         start_date: eventData.start
