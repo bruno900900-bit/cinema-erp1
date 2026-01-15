@@ -52,8 +52,6 @@ import { projectLocationService } from '../../services/projectLocationService';
 import { projectLocationStageService } from '../../services/projectLocationStageService';
 import { userService } from '../../services/userService';
 import { formatDateBR } from '../../utils/date';
-import LocationStageTimeline from './LocationStageTimeline';
-import SimpleStageList from './SimpleStageList';
 import { LocationDemandsList } from '../Demands';
 import { useAuth } from '../../hooks/useAuth';
 
@@ -309,16 +307,6 @@ export default function ProjectLocationsOverview({
             const responsibleUser = getUserById(location.responsible_user_id);
             const coordinatorUser = getUserById(location.coordinator_user_id);
 
-            // Calculate stage statistics
-            const stages = location.stages || [];
-            const completedStages = stages.filter(
-              (s: any) => s.status === 'completed'
-            ).length;
-            const progressPercentage =
-              stages.length > 0
-                ? Math.round((completedStages / stages.length) * 100)
-                : 0;
-
             return (
               <Card
                 key={location.id}
@@ -529,44 +517,6 @@ export default function ProjectLocationsOverview({
                           </Tooltip>
                         )}
                       </AvatarGroup>
-
-                      {/* Progresso */}
-                      <Box
-                        sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
-                      >
-                        <Typography variant="body2" color="text.secondary">
-                          {Math.round(progressPercentage)}%
-                        </Typography>
-                        <Box
-                          sx={{
-                            width: 60,
-                            height: 60,
-                            borderRadius: '50%',
-                            background: `conic-gradient(#4caf50 ${
-                              progressPercentage * 3.6
-                            }deg, #e0e0e0 0deg)`,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                          }}
-                        >
-                          <Box
-                            sx={{
-                              width: 50,
-                              height: 50,
-                              borderRadius: '50%',
-                              backgroundColor: 'background.paper',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                            }}
-                          >
-                            <Typography variant="body2" fontWeight="bold">
-                              {completedStages}/{stages.length}
-                            </Typography>
-                          </Box>
-                        </Box>
-                      </Box>
                     </Box>
                   </Box>
 
