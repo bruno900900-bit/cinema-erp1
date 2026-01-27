@@ -44,6 +44,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import { userService } from '../../services/userService';
 import {
   locationDemandService,
   LocationDemand,
@@ -87,19 +88,35 @@ export default function UserDemandsList({
     new Set()
   );
 
-  // Fetch user demands
+  // Get current user profile to check if admin
+  const { data: currentUser } = useQuery({
+    queryKey: ['current-user'],
+    queryFn: () => userService.getMyProfile(),
+  });
+
+  const isAdmin = currentUser?.role === 'admin';
+
+  // Fetch demands - admins see all, users see only theirs
   const {
     data: demands = [],
     isLoading,
     error,
   } = useQuery<LocationDemand[]>({
-    queryKey: ['my-demands', user?.id, showCreatedDemands],
-    queryFn: () =>
-      locationDemandService.getMyDemands(
-        Number(user?.id) || 0,
-        showCreatedDemands
-      ),
-    enabled: !!user?.id,
+    queryKey: ['my-demands', user?.id, showCreatedDemands, isAdmin],
+    queryFn: async () => {
+      if (isAdmin) {
+        // Admin: fetch ALL demands from all projects
+        const response = await locationDemandService.getDemands({});
+        return response.demands;
+      } else {
+        // Regular user: fetch only their demands
+        return locationDemandService.getMyDemands(
+          Number(user?.id) || 0,
+          showCreatedDemands
+        );
+      }
+    },
+    enabled: !!user?.id && currentUser !== undefined,
   });
 
   // Mutation for status updates
@@ -251,6 +268,14 @@ export default function UserDemandsList({
           />
         )}
       </Box>
+
+      {/* Admin Indicator */}
+      {isAdmin && (
+        <Alert severity="info" icon={<FolderOpen />} sx={{ mb: 3 }}>
+          🔐 <strong>Visualização Administrativa</strong> - Mostrando todas as
+          demandas de todos os projetos
+        </Alert>
+      )}
 
       {/* Filters */}
       <Paper sx={{ p: 2, mb: 3 }}>

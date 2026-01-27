@@ -16,6 +16,7 @@ export enum EventType {
   DELIVERY = 'delivery',
   CONTRACT_SIGNED = 'contract_signed',
   PAYMENT_DUE = 'payment_due',
+  DEMAND_DUE = 'demand_due', // NEW: Demand due date
   CUSTOM = 'custom',
 }
 

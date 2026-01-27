@@ -47,19 +47,36 @@ export default function UserCreateModal({
     role: UserRole.VIEWER,
     phone: '',
     bio: '',
+    password: '',
+    confirmPassword: '',
   });
 
   const [permissions, setPermissions] = useState(defaultPermissions);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async () => {
     setLoading(true);
     setError(null);
 
+    // Validar senha
+    if (formData.password !== formData.confirmPassword) {
+      setError('As senhas não coincidem');
+      setLoading(false);
+      return;
+    }
+
+    if (formData.password.length < 6) {
+      setError('A senha deve ter pelo menos 6 caracteres');
+      setLoading(false);
+      return;
+    }
+
     try {
+      const { confirmPassword, ...userData } = formData;
       await userService.createUserAsAdmin({
-        ...formData,
+        ...userData,
         permissions_json: permissions,
       });
 
@@ -73,6 +90,8 @@ export default function UserCreateModal({
         role: UserRole.VIEWER,
         phone: '',
         bio: '',
+        password: '',
+        confirmPassword: '',
       });
       setPermissions(defaultPermissions);
     } catch (err: any) {
@@ -148,6 +167,55 @@ export default function UserCreateModal({
                 onChange={e =>
                   setFormData({ ...formData, phone: e.target.value })
                 }
+              />
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                label="Senha"
+                type={showPassword ? 'text' : 'password'}
+                value={formData.password}
+                onChange={e =>
+                  setFormData({ ...formData, password: e.target.value })
+                }
+                required
+                helperText="Mínimo de 6 caracteres"
+              />
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                label="Confirmar Senha"
+                type={showPassword ? 'text' : 'password'}
+                value={formData.confirmPassword}
+                onChange={e =>
+                  setFormData({ ...formData, confirmPassword: e.target.value })
+                }
+                required
+                error={
+                  formData.confirmPassword !== '' &&
+                  formData.password !== formData.confirmPassword
+                }
+                helperText={
+                  formData.confirmPassword !== '' &&
+                  formData.password !== formData.confirmPassword
+                    ? 'As senhas não coincidem'
+                    : ''
+                }
+              />
+            </Grid>
+
+            <Grid item xs={12}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={showPassword}
+                    onChange={e => setShowPassword(e.target.checked)}
+                  />
+                }
+                label="Mostrar senhas"
               />
             </Grid>
 
@@ -258,10 +326,9 @@ export default function UserCreateModal({
 
             <Grid item xs={12}>
               <Alert severity="info">
-                O usuário será criado no sistema de autenticação e receberá um
-                email de confirmação. Após confirmar o email, ele poderá fazer
-                login e definir sua senha através da opção "Esqueci minha
-                senha".
+                O usuário será criado com a senha definida e poderá fazer login
+                imediatamente usando o email e senha cadastrados. É recomendado
+                que o usuário altere sua senha no primeiro acesso.
               </Alert>
             </Grid>
           </Grid>
@@ -274,7 +341,14 @@ export default function UserCreateModal({
         <Button
           onClick={handleSubmit}
           variant="contained"
-          disabled={loading || !formData.email || !formData.full_name}
+          disabled={
+            loading ||
+            !formData.email ||
+            !formData.full_name ||
+            !formData.password ||
+            !formData.confirmPassword ||
+            formData.password !== formData.confirmPassword
+          }
         >
           {loading ? 'Criando...' : 'Criar Usuário'}
         </Button>

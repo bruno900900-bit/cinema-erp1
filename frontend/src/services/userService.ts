@@ -63,25 +63,21 @@ export const userService = {
     email: string;
     full_name: string;
     role: UserRole;
+    password: string;
     permissions_json?: Record<string, boolean>;
     phone?: string;
     bio?: string;
   }) =>
     withDiagnostic('userService.createUserAsAdmin', async () => {
       // Step 1: Create user in Supabase Auth using signUp
-      // Note: We use signUp since admin API requires service_role key (backend only)
-      // The user will need to verify their email or use magic link
-      const tempPassword = crypto.randomUUID(); // Temporary password, user will reset via email
-
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: userData.email,
-        password: tempPassword,
+        password: userData.password, // Use password provided by admin
         options: {
           data: {
             full_name: userData.full_name,
             role: userData.role,
           },
-          // This will send a confirmation email to the user
           emailRedirectTo: `${window.location.origin}/login`,
         },
       });

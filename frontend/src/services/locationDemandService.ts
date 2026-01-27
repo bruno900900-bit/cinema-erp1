@@ -4,6 +4,11 @@
  */
 
 import { supabase } from '../config/supabaseClient';
+import {
+  agendaEventService,
+  EventType,
+  EventStatus,
+} from './agendaEventService';
 
 // ===== Types =====
 
@@ -147,6 +152,73 @@ class LocationDemandService {
   private viewName = 'location_demands_with_users';
 
   /**
+   * Sync demand to agenda - create/update/delete events as needed
+   */
+  private async syncDemandToAgenda(demand: LocationDemand): Promise<void> {
+    try {
+      if (!demand.due_date) {
+        // No due date - delete event if exists
+        if (demand.agenda_event_id) {
+          try {
+            await agendaEventService.deleteEvent(demand.agenda_event_id);
+            // Clear the reference
+            await supabase
+              .from(this.tableName)
+              .update({ agenda_event_id: null })
+              .eq('id', demand.id);
+          } catch (error) {
+            console.warn('Failed to delete agenda event:', error);
+          }
+        }
+        return;
+      }
+
+      const eventData = {
+        title: `📋 ${demand.title}`,
+        description: demand.description || 'Vencimento de demanda',
+        start_date: new Date(demand.due_date).toISOString().split('T')[0],
+        all_day: true,
+        event_type: EventType.DEMAND_DUE,
+        status:
+          demand.status === 'completed'
+            ? EventStatus.COMPLETED
+            : EventStatus.SCHEDULED,
+        project_id: demand.project_id,
+        priority:
+          demand.priority === 'urgent'
+            ? 5
+            : demand.priority === 'high'
+              ? 4
+              : demand.priority === 'medium'
+                ? 3
+                : 2,
+        color: demand.is_overdue ? '#f44336' : '#2196f3',
+        metadata_json: {
+          demand_id: demand.id,
+          demand_category: demand.category,
+          demand_priority: demand.priority,
+        },
+      };
+
+      if (demand.agenda_event_id) {
+        // Update existing event
+        await agendaEventService.updateEvent(demand.agenda_event_id, eventData);
+      } else {
+        // Create new event
+        const event = await agendaEventService.createEvent(eventData);
+        // Update demand with event ID
+        await supabase
+          .from(this.tableName)
+          .update({ agenda_event_id: event.id })
+          .eq('id', demand.id);
+      }
+    } catch (error) {
+      console.error('Failed to sync demand to agenda:', error);
+      // Don't fail the demand operation if agenda sync fails
+    }
+  }
+
+  /**
    * Create a new demand
    */
   async createDemand(data: LocationDemandCreate): Promise<LocationDemand> {
@@ -160,6 +232,9 @@ class LocationDemandService {
       console.error('Error creating demand:', error);
       throw new Error(`Erro ao criar demanda: ${error.message}`);
     }
+
+    // Sync to agenda after creation
+    await this.syncDemandToAgenda(result as LocationDemand);
 
     return result as LocationDemand;
   }
@@ -378,6 +453,9 @@ class LocationDemandService {
       throw new Error(`Erro ao atualizar demanda: ${error.message}`);
     }
 
+    // Sync to agenda after update
+    await this.syncDemandToAgenda(result as LocationDemand);
+
     return result as LocationDemand;
   }
 
@@ -411,6 +489,14 @@ class LocationDemandService {
    * Delete a demand
    */
   async deleteDemand(demandId: number): Promise<{ message: string }> {
+    // Get demand to find agenda_event_id before deletion
+    const { data: demand } = await supabase
+      .from(this.tableName)
+      .select('agenda_event_id')
+      .eq('id', demandId)
+      .single();
+
+    // Delete demand
     const { error } = await supabase
       .from(this.tableName)
       .delete()
@@ -419,6 +505,15 @@ class LocationDemandService {
     if (error) {
       console.error('Error deleting demand:', error);
       throw new Error(`Erro ao deletar demanda: ${error.message}`);
+    }
+
+    // Delete associated agenda event if exists
+    if (demand?.agenda_event_id) {
+      try {
+        await agendaEventService.deleteEvent(demand.agenda_event_id);
+      } catch (error) {
+        console.warn('Failed to delete associated agenda event:', error);
+      }
     }
 
     return { message: 'Demanda deletada com sucesso' };
