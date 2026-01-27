@@ -22,6 +22,7 @@ import {
   Dashboard,
   LocationOn,
   Assignment,
+  AssignmentInd,
   Description,
   Event,
   People,
@@ -62,6 +63,12 @@ const menuItems = [
     icon: <Assignment />,
     path: '/projects',
     permission: 'canManageProjects',
+  },
+  {
+    text: 'Minhas Demandas',
+    icon: <AssignmentInd />,
+    path: '/my-demands',
+    permission: null, // Available to all authenticated users
   },
   {
     text: 'Contratos',
@@ -122,6 +129,7 @@ export default function Layout({ children }: LayoutProps) {
       '/settings': 'canManageSettings',
       '/files': 'canViewReports',
       '/contracts': 'canManageProjects',
+      '/my-demands': null, // Available to all
     };
 
     return menuItems.filter(item => {

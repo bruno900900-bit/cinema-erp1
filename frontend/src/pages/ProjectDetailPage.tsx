@@ -18,6 +18,7 @@ import {
   DialogContent,
   DialogActions,
   TextField,
+  InputAdornment,
 } from '@mui/material';
 import {
   ArrowBack,
@@ -30,6 +31,8 @@ import {
   ExpandMore,
   ExpandLess,
   Close,
+  Notifications,
+  CalendarMonth,
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Project, TaskStatus, ProjectLocation } from '@/types/user';
@@ -50,6 +53,7 @@ import ProjectVisitLocationsPanel from '@/components/Projects/ProjectVisitLocati
 import ProjectTimelineHub from '@/components/Projects/ProjectTimelineHub';
 import ProjectPhotosGallery from '@/components/Projects/ProjectPhotosGallery';
 import ProjectQuickActions from '@/components/Projects/ProjectQuickActions';
+import ProjectDemandsList from '@/components/Demands/ProjectDemandsList';
 import { formatDateBR, toInputDate } from '@/utils/date';
 import { toast } from 'react-toastify';
 
@@ -87,6 +91,15 @@ const ProjectDetailPage: React.FC = () => {
     enabled: isLocationSelectionOpen,
     staleTime: 5 * 60 * 1000,
     select: data => data?.locations || [],
+  });
+
+  // Fetch project locations for demands list
+  const { data: projectLocations = [] } = useQuery({
+    queryKey: ['project-locations', projectId],
+    queryFn: () =>
+      projectLocationService.getProjectLocations(Number(projectId)),
+    enabled: !!projectId,
+    staleTime: 30 * 1000, // 30 seconds
   });
 
   // Mutation to add project locations
@@ -242,9 +255,8 @@ const ProjectDetailPage: React.FC = () => {
         project.id
       );
 
-      const { projectReportService } = await import(
-        '@/services/projectReportService'
-      );
+      const { projectReportService } =
+        await import('@/services/projectReportService');
       projectReportService.exportProjectReport(project, locations);
 
       toast.success('Relatório exportado com sucesso!');
@@ -316,19 +328,19 @@ const ProjectDetailPage: React.FC = () => {
                     project.status === 'completed'
                       ? '✅ Concluído'
                       : project.status === 'in_progress'
-                      ? '🚧 Em Andamento'
-                      : project.status === 'planning'
-                      ? '📋 Planejamento'
-                      : '⏸️ Pausado'
+                        ? '🚧 Em Andamento'
+                        : project.status === 'planning'
+                          ? '📋 Planejamento'
+                          : '⏸️ Pausado'
                   }
                   color={
                     project.status === 'completed'
                       ? 'success'
                       : project.status === 'in_progress'
-                      ? 'warning'
-                      : project.status === 'planning'
-                      ? 'info'
-                      : 'default'
+                        ? 'warning'
+                        : project.status === 'planning'
+                          ? 'info'
+                          : 'default'
                   }
                   sx={{
                     fontWeight: 600,
@@ -481,75 +493,6 @@ const ProjectDetailPage: React.FC = () => {
             </Grid>
           </Paper>
 
-          {/* Progresso */}
-          <Paper sx={{ p: 3, mb: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              Progresso do Projeto
-            </Typography>
-            <Box sx={{ mb: 2 }}>
-              <Box
-                sx={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  mb: 1,
-                }}
-              >
-                <Typography variant="body2">Progresso Geral</Typography>
-                <Typography variant="body2">
-                  {Math.round(calculateProgress())}%
-                </Typography>
-              </Box>
-              <LinearProgress
-                variant="determinate"
-                value={calculateProgress()}
-                sx={{ height: 8, borderRadius: 4 }}
-              />
-            </Box>
-
-            <Grid container spacing={2}>
-              <Grid item xs={6} sm={3}>
-                <Typography variant="h4" color="primary">
-                  {project.tasks?.length || 0}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Total de Tarefas
-                </Typography>
-              </Grid>
-              <Grid item xs={6} sm={3}>
-                <Typography variant="h4" color="success.main">
-                  {project.tasks?.filter(t => t.status === 'completed')
-                    .length || 0}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Concluídas
-                </Typography>
-              </Grid>
-              <Grid item xs={6} sm={3}>
-                <Typography variant="h4" color="warning.main">
-                  {project.tasks?.filter(t => t.status === 'in_progress')
-                    .length || 0}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Em Andamento
-                </Typography>
-              </Grid>
-              <Grid item xs={6} sm={3}>
-                <Typography variant="h4" color="error">
-                  {project.tasks?.filter(t => {
-                    if (!t.due_date) return false;
-                    const isCompleted =
-                      t.status === TaskStatus.COMPLETED ||
-                      t.status === TaskStatus.CANCELLED;
-                    return !isCompleted && new Date(t.due_date) < new Date();
-                  }).length || 0}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Atrasadas
-                </Typography>
-              </Grid>
-            </Grid>
-          </Paper>
-
           {/* Locações */}
           <Paper sx={{ p: 3, mb: 3 }}>
             <ProjectLocationsOverview
@@ -593,6 +536,18 @@ const ProjectDetailPage: React.FC = () => {
                   ? project.id
                   : parseInt(project.id)
               }
+            />
+          </Paper>
+
+          {/* Lista de Demandas */}
+          <Paper sx={{ p: 3, mb: 3 }}>
+            <ProjectDemandsList
+              projectId={
+                typeof project.id === 'number'
+                  ? project.id
+                  : parseInt(project.id)
+              }
+              projectLocations={projectLocations}
             />
           </Paper>
 

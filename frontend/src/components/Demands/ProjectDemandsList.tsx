@@ -35,6 +35,7 @@ import {
   Flag,
   ExpandMore,
   ExpandLess,
+  CalendarMonth,
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -49,6 +50,14 @@ import {
 } from '../../services/locationDemandService';
 import { ProjectLocation } from '../../types/user';
 import DemandFormModal from './DemandFormModal';
+import DemandFiltersComponent, {
+  DemandFilters,
+  defaultFilters,
+} from './DemandFilters';
+import {
+  projectVisitLocationService,
+  VisitLocationBrief,
+} from '../../services/projectVisitLocationService';
 
 interface ProjectDemandsListProps {
   projectId: number;
@@ -71,12 +80,19 @@ export default function ProjectDemandsList({
     element: HTMLElement;
     demand: LocationDemand;
   } | null>(null);
-  const [showCompleted, setShowCompleted] = useState(false);
+  const [filters, setFilters] = useState<DemandFilters>(defaultFilters);
 
   // Fetch all demands for the project
   const { data: demands = [], isLoading } = useQuery({
     queryKey: ['project-demands', projectId],
     queryFn: () => locationDemandService.getDemandsByProject(projectId),
+    enabled: !!projectId,
+  });
+
+  // Fetch visit locations for the project
+  const { data: visitLocations = [] } = useQuery<VisitLocationBrief[]>({
+    queryKey: ['visit-locations', projectId],
+    queryFn: () => projectVisitLocationService.getByProject(projectId),
     enabled: !!projectId,
   });
 
@@ -144,9 +160,22 @@ export default function ProjectDemandsList({
   };
 
   // Get location name by ID
-  const getLocationName = (locationId: number): string => {
-    const location = projectLocations.find(l => parseInt(l.id) === locationId);
-    return location?.location?.title || `Locação ${locationId}`;
+  const getLocationName = (demand: LocationDemand): string => {
+    // Check if it's a visit location
+    if (demand.visit_location_id) {
+      const visitLoc = visitLocations.find(
+        v => v.id === demand.visit_location_id
+      );
+      return visitLoc?.name || `Locação Visitada #${demand.visit_location_id}`;
+    }
+
+    // Otherwise it's a project location
+    const location = projectLocations.find(
+      loc => parseInt(loc.id) === demand.project_location_id
+    );
+    return (
+      location?.location?.title || `Locação #${demand.project_location_id}`
+    );
   };
 
   // Get days until due
@@ -179,49 +208,158 @@ export default function ProjectDemandsList({
     return { text: `${diffDays}d`, color: '#9E9E9E', isOverdue: false };
   };
 
-  // Group demands by location
-  const demandsByLocation = demands.reduce((acc, demand) => {
-    const locId = demand.project_location_id;
-    if (!acc[locId]) acc[locId] = [];
-    acc[locId].push(demand);
-    return acc;
-  }, {} as Record<number, LocationDemand[]>);
+  // Apply comprehensive filters
+  const applyFilters = (demands: LocationDemand[]): LocationDemand[] => {
+    return demands.filter(demand => {
+      // Search filter
+      if (filters.search) {
+        const searchLower = filters.search.toLowerCase();
+        const matchesSearch =
+          demand.title?.toLowerCase().includes(searchLower) ||
+          demand.description?.toLowerCase().includes(searchLower);
+        if (!matchesSearch) return false;
+      }
 
-  // Sort demands within each location by priority and status
-  const priorityOrder = { urgent: 0, high: 1, medium: 2, low: 3 };
-  const statusOrder = {
-    pending: 0,
-    in_progress: 1,
-    on_hold: 2,
-    completed: 3,
-    cancelled: 4,
+      // Location filter
+      if (filters.locations.length > 0) {
+        if (!filters.locations.includes(demand.project_location_id)) {
+          return false;
+        }
+      }
+
+      // Priority filter
+      if (filters.priorities.length > 0) {
+        if (!filters.priorities.includes(demand.priority)) {
+          return false;
+        }
+      }
+
+      // Status filter
+      if (filters.statuses.length > 0) {
+        if (!filters.statuses.includes(demand.status)) {
+          return false;
+        }
+      }
+
+      // Assignee filter
+      if (filters.assignees.length > 0) {
+        if (filters.assignees.includes(-1)) {
+          // Include unassigned
+          if (
+            demand.assigned_user_id &&
+            !filters.assignees.includes(demand.assigned_user_id)
+          ) {
+            return false;
+          }
+        } else {
+          if (
+            !demand.assigned_user_id ||
+            !filters.assignees.includes(demand.assigned_user_id)
+          ) {
+            return false;
+          }
+        }
+      }
+
+      // Overdue filter
+      if (filters.overdueOnly && !demand.is_overdue) {
+        return false;
+      }
+
+      // My tasks filter (would need currentUserId passed as prop)
+      // This is handled below with availableAssignees extraction
+
+      return true;
+    });
   };
 
-  Object.keys(demandsByLocation).forEach(locId => {
-    demandsByLocation[Number(locId)].sort((a, b) => {
-      if (a.status === 'completed' && b.status !== 'completed') return 1;
-      if (a.status !== 'completed' && b.status === 'completed') return -1;
-      return priorityOrder[a.priority] - priorityOrder[b.priority];
-    });
-  });
+  // Apply sorting
+  const applySorting = (demands: LocationDemand[]): LocationDemand[] => {
+    const sorted = [...demands];
+    const priorityOrder = { urgent: 0, high: 1, medium: 2, low: 3 };
 
-  // Filter out completed unless showCompleted is true
-  const filteredDemandsByLocation = Object.fromEntries(
-    Object.entries(demandsByLocation).map(([locId, locDemands]) => [
-      locId,
-      showCompleted
-        ? locDemands
-        : locDemands.filter(d => d.status !== 'completed'),
-    ])
+    sorted.sort((a, b) => {
+      switch (filters.sortBy) {
+        case 'priority':
+          // Completed last, then by priority
+          if (a.status === 'completed' && b.status !== 'completed') return 1;
+          if (a.status !== 'completed' && b.status === 'completed') return -1;
+          return priorityOrder[a.priority] - priorityOrder[b.priority];
+
+        case 'created_desc':
+          return (
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          );
+
+        case 'created_asc':
+          return (
+            new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+          );
+
+        case 'due_asc':
+          if (!a.due_date) return 1;
+          if (!b.due_date) return -1;
+          return (
+            new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
+          );
+
+        case 'due_desc':
+          if (!a.due_date) return 1;
+          if (!b.due_date) return -1;
+          return (
+            new Date(b.due_date).getTime() - new Date(a.due_date).getTime()
+          );
+
+        case 'alpha':
+          return (a.title || '').localeCompare(b.title || '');
+
+        default:
+          return 0;
+      }
+    });
+
+    return sorted;
+  };
+
+  // Apply filters and sorting
+  const filteredDemands = applySorting(applyFilters(demands));
+
+  // Group filtered demands by location with unique keys for each
+  const demandsByLocation = filteredDemands.reduce(
+    (acc, demand) => {
+      // Create unique key: "project-{id}" or "visit-{id}"
+      const locKey = demand.visit_location_id
+        ? `visit-${demand.visit_location_id}`
+        : `project-${demand.project_location_id}`;
+
+      if (!acc[locKey]) acc[locKey] = [];
+      acc[locKey].push(demand);
+      return acc;
+    },
+    {} as Record<string, LocationDemand[]>
   );
 
-  // Summary stats
-  const totalDemands = demands.length;
-  const pendingDemands = demands.filter(
+  // Extract available assignees for filter dropdown
+  const availableAssignees = Array.from(
+    new Map(
+      demands
+        .filter(d => d.assigned_user_id && d.assigned_user_name)
+        .map(d => [
+          d.assigned_user_id,
+          { id: d.assigned_user_id!, name: d.assigned_user_name! },
+        ])
+    ).values()
+  );
+
+  // Summary stats (based on filtered demands)
+  const totalDemands = filteredDemands.length;
+  const pendingDemands = filteredDemands.filter(
     d => d.status === 'pending' || d.status === 'in_progress'
   ).length;
-  const completedDemands = demands.filter(d => d.status === 'completed').length;
-  const overdueDemands = demands.filter(d => d.is_overdue).length;
+  const completedDemands = filteredDemands.filter(
+    d => d.status === 'completed'
+  ).length;
+  const overdueDemands = filteredDemands.filter(d => d.is_overdue).length;
 
   if (isLoading) {
     return (
@@ -233,6 +371,14 @@ export default function ProjectDemandsList({
 
   return (
     <Box>
+      {/* Filters */}
+      <DemandFiltersComponent
+        filters={filters}
+        onFiltersChange={setFilters}
+        projectLocations={projectLocations}
+        availableAssignees={availableAssignees}
+      />
+
       {/* Header with summary */}
       <Box
         sx={{
@@ -272,13 +418,6 @@ export default function ProjectDemandsList({
         </Box>
         <Box sx={{ display: 'flex', gap: 1 }}>
           <Button
-            size="small"
-            onClick={() => setShowCompleted(!showCompleted)}
-            variant={showCompleted ? 'contained' : 'outlined'}
-          >
-            {showCompleted ? 'Ocultar Concluídas' : 'Mostrar Concluídas'}
-          </Button>
-          <Button
             variant="contained"
             startIcon={<Add />}
             onClick={() => handleAddDemand()}
@@ -296,19 +435,27 @@ export default function ProjectDemandsList({
         </Alert>
       ) : (
         <Paper variant="outlined" sx={{ borderRadius: 2, overflow: 'hidden' }}>
-          {Object.entries(filteredDemandsByLocation).map(
+          {Object.entries(demandsByLocation).map(
             ([locIdStr, locDemands], groupIndex) => {
               const locId = Number(locIdStr);
-              const locationName = getLocationName(locId);
+              // Get location name from first demand in group (to determine type)
+              const locationName =
+                locDemands.length > 0
+                  ? getLocationName(locDemands[0])
+                  : `Locação ${locId}`;
               const locCompletedCount = locDemands.filter(
                 d => d.status === 'completed'
               ).length;
               const locPendingCount = locDemands.length - locCompletedCount;
 
-              if (locDemands.length === 0 && !showCompleted) return null;
+              if (locDemands.length === 0) return null;
+
+              // Determine if this is a visit location
+              const isVisitLocation =
+                locDemands.length > 0 && !!locDemands[0].visit_location_id;
 
               return (
-                <Box key={locId}>
+                <Box key={locIdStr}>
                   {groupIndex > 0 && <Divider />}
 
                   {/* Location header */}
@@ -316,7 +463,7 @@ export default function ProjectDemandsList({
                     sx={{
                       px: 2,
                       py: 1.5,
-                      bgcolor: 'primary.50',
+                      bgcolor: isVisitLocation ? 'secondary.50' : 'primary.50',
                       borderBottom: '1px solid',
                       borderColor: 'divider',
                       display: 'flex',
@@ -325,13 +472,24 @@ export default function ProjectDemandsList({
                     }}
                   >
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <LocationOn
-                        sx={{ color: 'primary.main', fontSize: 20 }}
-                      />
+                      {isVisitLocation ? (
+                        <Chip
+                          label="🏞️ Visitada"
+                          size="small"
+                          color="secondary"
+                          sx={{ fontWeight: 'bold' }}
+                        />
+                      ) : (
+                        <LocationOn
+                          sx={{ color: 'primary.main', fontSize: 20 }}
+                        />
+                      )}
                       <Typography
                         variant="subtitle1"
                         fontWeight="bold"
-                        color="primary.main"
+                        color={
+                          isVisitLocation ? 'secondary.main' : 'primary.main'
+                        }
                       >
                         {locationName}
                       </Typography>
@@ -511,6 +669,54 @@ export default function ProjectDemandsList({
                                         }}
                                       >
                                         {dueInfo.text}
+                                      </Typography>
+                                      {demand.due_date && (
+                                        <Typography
+                                          variant="caption"
+                                          sx={{
+                                            color: 'text.secondary',
+                                            ml: 0.5,
+                                          }}
+                                        >
+                                          (
+                                          {new Date(
+                                            demand.due_date
+                                          ).toLocaleDateString('pt-BR', {
+                                            day: '2-digit',
+                                            month: '2-digit',
+                                            year: 'numeric',
+                                          })}
+                                          )
+                                        </Typography>
+                                      )}
+                                    </Box>
+                                  )}
+                                  {!dueInfo && demand.due_date && (
+                                    <Box
+                                      sx={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 0.5,
+                                      }}
+                                    >
+                                      <CalendarMonth
+                                        sx={{
+                                          fontSize: 14,
+                                          color: 'text.secondary',
+                                        }}
+                                      />
+                                      <Typography
+                                        variant="caption"
+                                        sx={{ color: 'text.secondary' }}
+                                      >
+                                        Vence em:{' '}
+                                        {new Date(
+                                          demand.due_date
+                                        ).toLocaleDateString('pt-BR', {
+                                          day: '2-digit',
+                                          month: '2-digit',
+                                          year: 'numeric',
+                                        })}
                                       </Typography>
                                     </Box>
                                   )}

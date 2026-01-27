@@ -29,8 +29,9 @@ class LocationDemand(Base, TimestampMixin):
     __tablename__ = "location_demands"
     __table_args__ = {'extend_existing': True}
 
-    # Relacionamentos principais
-    project_location_id = Column(Integer, ForeignKey("project_locations.id", ondelete="CASCADE"), nullable=False)
+    # Relacionamentos principais - um dos dois deve estar preenchido
+    project_location_id = Column(Integer, ForeignKey("project_locations.id", ondelete="CASCADE"), nullable=True)
+    visit_location_id = Column(Integer, ForeignKey("project_visit_locations.id", ondelete="CASCADE"), nullable=True)
     project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
 
     # Dados da demanda
@@ -59,6 +60,7 @@ class LocationDemand(Base, TimestampMixin):
 
     # Relacionamentos
     project_location = relationship("ProjectLocation", back_populates="demands")
+    visit_location = relationship("ProjectVisitLocation", back_populates="demands")
     project = relationship("Project", back_populates="demands")
     assigned_user = relationship("User", foreign_keys=[assigned_user_id])
     created_by_user = relationship("User", foreign_keys=[created_by_user_id])

@@ -23,6 +23,7 @@ import SettingsPage from './pages/SettingsPage';
 import ProfilePage from './pages/ProfilePage';
 import ReportsPage from './pages/ReportsPage';
 import TagsPage from './pages/TagsPage';
+import MyDemandsPage from './pages/MyDemandsPage';
 import UnauthorizedPage from './pages/UnauthorizedPage';
 import LoadingSpinner from './components/Common/LoadingSpinner';
 import ProtectedRoute from './components/Common/ProtectedRoute';
@@ -197,6 +198,14 @@ function App() {
                 element={
                   <ProtectedRoute requiredPermission="canManageSettings">
                     <SettingsPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/my-demands"
+                element={
+                  <ProtectedRoute>
+                    <MyDemandsPage />
                   </ProtectedRoute>
                 }
               />

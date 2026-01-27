@@ -18,10 +18,12 @@ class LocationDemandBase(BaseModel):
 
 class LocationDemandCreate(LocationDemandBase):
     """Schema for creating a new LocationDemand"""
-    project_location_id: int = Field(..., description="ID da locação do projeto")
+    project_location_id: Optional[int] = Field(None, description="ID da locação do projeto (contrato)")
+    visit_location_id: Optional[int] = Field(None, description="ID da locação visitada")
     project_id: int = Field(..., description="ID do projeto")
     assigned_user_id: Optional[int] = Field(None, description="ID do usuário responsável")
     # created_by_user_id será preenchido pelo backend
+    # NOTA: project_location_id OU visit_location_id deve estar preenchido
 
 
 class LocationDemandUpdate(BaseModel):
@@ -40,7 +42,8 @@ class LocationDemandUpdate(BaseModel):
 class LocationDemandResponse(LocationDemandBase):
     """Schema for LocationDemand response"""
     id: int
-    project_location_id: int
+    project_location_id: Optional[int] = None
+    visit_location_id: Optional[int] = None
     project_id: int
     assigned_user_id: Optional[int] = None
     created_by_user_id: Optional[int] = None
@@ -73,7 +76,8 @@ class LocationDemandListResponse(BaseModel):
 class LocationDemandFilter(BaseModel):
     """Schema for filtering demands"""
     project_id: Optional[int] = Field(None, description="Filtrar por projeto")
-    project_location_id: Optional[int] = Field(None, description="Filtrar por locação")
+    project_location_id: Optional[int] = Field(None, description="Filtrar por locação de contrato")
+    visit_location_id: Optional[int] = Field(None, description="Filtrar por locação visitada")
     status: Optional[DemandStatus] = Field(None, description="Filtrar por status")
     priority: Optional[DemandPriority] = Field(None, description="Filtrar por prioridade")
     assigned_user_id: Optional[int] = Field(None, description="Filtrar por responsável")

@@ -16,7 +16,10 @@ import {
   CircularProgress,
   Autocomplete,
   Chip,
+  Typography,
+  InputAdornment,
 } from '@mui/material';
+import { Notifications, CalendarMonth } from '@mui/icons-material';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -35,6 +38,10 @@ import {
 } from '../../services/locationDemandService';
 import { ProjectLocation, User } from '../../types/user';
 import { userService } from '../../services/userService';
+import {
+  projectVisitLocationService,
+  VisitLocationBrief,
+} from '../../services/projectVisitLocationService';
 
 interface DemandFormModalProps {
   open: boolean;
@@ -42,6 +49,7 @@ interface DemandFormModalProps {
   onSuccess: () => void;
   projectId: number;
   projectLocationId?: number;
+  visitLocationId?: number; // NEW: for visit locations
   projectLocations: ProjectLocation[];
   demand?: LocationDemand | null;
 }
@@ -66,6 +74,7 @@ export default function DemandFormModal({
   onSuccess,
   projectId,
   projectLocationId,
+  visitLocationId, // NEW
   projectLocations,
   demand,
 }: DemandFormModalProps) {
@@ -78,7 +87,7 @@ export default function DemandFormModal({
     priority: 'medium' as DemandPriority,
     status: 'pending' as DemandStatus,
     category: '',
-    project_location_id: projectLocationId || 0,
+    project_location_id: projectLocationId || (0 as number | string), // Can be number or "visit-{id}"
     assigned_user_id: null as number | null,
     due_date: null as Date | null,
     notes: '',
@@ -91,6 +100,13 @@ export default function DemandFormModal({
     queryFn: () => userService.getUsers(),
   });
   const users = usersData?.users || [];
+
+  // Fetch visit locations for the project
+  const { data: visitLocations = [] } = useQuery<VisitLocationBrief[]>({
+    queryKey: ['visit-locations', projectId],
+    queryFn: () => projectVisitLocationService.getByProject(projectId),
+    enabled: !!projectId,
+  });
 
   // Reset form when opening
   useEffect(() => {
@@ -158,7 +174,9 @@ export default function DemandFormModal({
       setError('Título é obrigatório');
       return;
     }
-    if (!formData.project_location_id) {
+
+    // Validation - only for new demands (editing demands already have location)
+    if (!isEditing && !visitLocationId && !formData.project_location_id) {
       setError('Selecione uma locação');
       return;
     }
@@ -180,7 +198,17 @@ export default function DemandFormModal({
       createMutation.mutate({
         ...payload,
         project_id: projectId,
-        project_location_id: formData.project_location_id,
+        // Parse location value to determine type
+        ...(visitLocationId
+          ? { visit_location_id: visitLocationId }
+          : typeof formData.project_location_id === 'string' &&
+              formData.project_location_id.startsWith('visit-')
+            ? {
+                visit_location_id: parseInt(
+                  formData.project_location_id.replace('visit-', '')
+                ),
+              }
+            : { project_location_id: Number(formData.project_location_id) }),
       });
     }
   };
@@ -198,8 +226,8 @@ export default function DemandFormModal({
           <Box sx={{ mt: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
             {error && <Alert severity="error">{error}</Alert>}
 
-            {/* Location selector (only for new demands) */}
-            {!isEditing && (
+            {/* Location selector (only for new demands WITHOUT visitLocationId) */}
+            {!isEditing && !visitLocationId && (
               <FormControl fullWidth required>
                 <InputLabel>Locação</InputLabel>
                 <Select
@@ -212,9 +240,44 @@ export default function DemandFormModal({
                   }
                   label="Locação"
                 >
+                  {projectLocations.length > 0 && (
+                    <MenuItem disabled sx={{ fontWeight: 'bold', opacity: 1 }}>
+                      📍 Locações do Projeto
+                    </MenuItem>
+                  )}
                   {projectLocations.map(loc => (
-                    <MenuItem key={loc.id} value={parseInt(loc.id)}>
-                      {loc.location?.title || `Locação ${loc.id}`}
+                    <MenuItem
+                      key={`project-${loc.id}`}
+                      value={parseInt(loc.id)}
+                    >
+                      <Box
+                        sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
+                      >
+                        {loc.location?.title || `Locação ${loc.id}`}
+                      </Box>
+                    </MenuItem>
+                  ))}
+                  {visitLocations.length > 0 && (
+                    <MenuItem
+                      disabled
+                      sx={{ fontWeight: 'bold', opacity: 1, mt: 1 }}
+                    >
+                      🏞️ Locações Visitadas
+                    </MenuItem>
+                  )}
+                  {visitLocations.map(loc => (
+                    <MenuItem key={`visit-${loc.id}`} value={`visit-${loc.id}`}>
+                      <Box
+                        sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
+                      >
+                        <Chip
+                          label="Visitada"
+                          size="small"
+                          color="secondary"
+                          sx={{ height: 20, fontSize: '0.7rem' }}
+                        />
+                        {loc.name}
+                      </Box>
                     </MenuItem>
                   ))}
                 </Select>
@@ -327,45 +390,83 @@ export default function DemandFormModal({
             />
 
             {/* Assigned user */}
-            <FormControl fullWidth>
-              <InputLabel>Responsável</InputLabel>
-              <Select
-                value={formData.assigned_user_id || ''}
-                onChange={e =>
-                  setFormData(prev => ({
-                    ...prev,
-                    assigned_user_id: e.target.value
-                      ? Number(e.target.value)
-                      : null,
-                  }))
-                }
-                label="Responsável"
-              >
-                <MenuItem value="">Nenhum</MenuItem>
-                {users.map(user => (
-                  <MenuItem key={user.id} value={user.id}>
-                    {user.full_name || user.email}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <Box>
+              <FormControl fullWidth>
+                <InputLabel>Responsável</InputLabel>
+                <Select
+                  value={formData.assigned_user_id || ''}
+                  onChange={e =>
+                    setFormData(prev => ({
+                      ...prev,
+                      assigned_user_id: e.target.value
+                        ? Number(e.target.value)
+                        : null,
+                    }))
+                  }
+                  label="Responsável"
+                >
+                  <MenuItem value="">Nenhum</MenuItem>
+                  {users.map(user => (
+                    <MenuItem key={user.id} value={user.id}>
+                      {user.full_name || user.email}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              {formData.assigned_user_id && (
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0.5,
+                    mt: 0.5,
+                    color: 'info.main',
+                    fontSize: '0.75rem',
+                  }}
+                >
+                  <Notifications sx={{ fontSize: 16 }} />
+                  <Typography variant="caption">
+                    O usuário receberá uma notificação
+                  </Typography>
+                </Box>
+              )}
+            </Box>
 
             {/* Due date */}
-            <LocalizationProvider
-              dateAdapter={AdapterDateFns}
-              adapterLocale={ptBR}
-            >
-              <DateTimePicker
-                label="Data de vencimento"
-                value={formData.due_date}
-                onChange={newValue =>
-                  setFormData(prev => ({ ...prev, due_date: newValue }))
-                }
-                slotProps={{
-                  textField: { fullWidth: true },
-                }}
-              />
-            </LocalizationProvider>
+            <Box>
+              <LocalizationProvider
+                dateAdapter={AdapterDateFns}
+                adapterLocale={ptBR}
+              >
+                <DateTimePicker
+                  label="Data de vencimento"
+                  value={formData.due_date}
+                  onChange={newValue =>
+                    setFormData(prev => ({ ...prev, due_date: newValue }))
+                  }
+                  slotProps={{
+                    textField: { fullWidth: true },
+                  }}
+                />
+              </LocalizationProvider>
+              {formData.due_date && (
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0.5,
+                    mt: 0.5,
+                    color: 'success.main',
+                    fontSize: '0.75rem',
+                  }}
+                >
+                  <CalendarMonth sx={{ fontSize: 16 }} />
+                  <Typography variant="caption">
+                    Será criado um evento na agenda
+                  </Typography>
+                </Box>
+              )}
+            </Box>
 
             {/* Notes */}
             <TextField

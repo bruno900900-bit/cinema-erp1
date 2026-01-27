@@ -8,6 +8,7 @@ class NotificationType(str, enum.Enum):
     SUCCESS = "success"
     WARNING = "warning"
     ERROR = "error"
+    DEMAND_ASSIGNED = "demand_assigned"
 
 class Notification(Base, TimestampMixin):
     __tablename__ = "notifications"

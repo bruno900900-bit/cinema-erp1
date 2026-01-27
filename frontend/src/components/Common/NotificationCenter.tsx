@@ -80,6 +80,24 @@ export default function NotificationCenter({
   useEffect(() => {
     if (user?.id) {
       loadNotifications();
+
+      // Subscribe to real-time notifications
+      const unsubscribe = notificationService.subscribeToNotifications(
+        Number(user.id),
+        newNotification => {
+          setNotifications(prev => [newNotification, ...prev]);
+        }
+      );
+
+      // Polling fallback (refresh every 30s)
+      const pollInterval = setInterval(() => {
+        loadNotifications();
+      }, 30000);
+
+      return () => {
+        unsubscribe();
+        clearInterval(pollInterval);
+      };
     }
   }, [user?.id]);
 
@@ -87,7 +105,9 @@ export default function NotificationCenter({
     try {
       setLoading(true);
       setError(null);
-      const data = await notificationService.getNotifications(user?.id);
+      const data = await notificationService.getNotifications(
+        user?.id ? Number(user.id) : undefined
+      );
       setNotifications(data);
     } catch (err: any) {
       setError(err.message || 'Erro ao carregar notificações');
@@ -129,19 +149,25 @@ export default function NotificationCenter({
     if (!user?.id) return;
 
     try {
-      await notificationService.markAllAsRead(user.id);
+      await notificationService.markAllAsRead(Number(user.id));
       setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
     } catch (error) {
       console.error('Erro ao marcar todas como lidas:', error);
+      setError('Erro ao marcar todas as notificações como lidas');
     }
   };
 
-  const handleDeleteNotification = async (notificationId: number) => {
+  const handleDeleteNotification = async (
+    notificationId: number,
+    event: React.MouseEvent
+  ) => {
+    event.stopPropagation(); // Prevent triggering the notification click
     try {
       await notificationService.deleteNotification(notificationId);
       setNotifications(prev => prev.filter(n => n.id !== notificationId));
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao excluir notificação:', error);
+      setError(error.message || 'Erro ao excluir notificação');
     }
   };
 
@@ -308,10 +334,9 @@ export default function NotificationCenter({
                       <IconButton
                         edge="end"
                         size="small"
-                        onClick={e => {
-                          e.stopPropagation();
-                          handleDeleteNotification(notification.id);
-                        }}
+                        onClick={e =>
+                          handleDeleteNotification(notification.id, e)
+                        }
                       >
                         <Delete fontSize="small" />
                       </IconButton>
@@ -342,48 +367,3 @@ export default function NotificationCenter({
     </>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
