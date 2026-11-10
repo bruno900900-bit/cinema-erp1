@@ -196,6 +196,11 @@ export default function ProjectWorkflowPanel({
         icon: <Schedule fontSize="small" />,
         label: 'Não Iniciada',
       },
+      [TaskStatus.PENDING]: {
+        color: theme.palette.grey[500],
+        icon: <Schedule fontSize="small" />,
+        label: 'Pendente',
+      },
       [TaskStatus.IN_PROGRESS]: {
         color: theme.palette.warning.main,
         icon: <PlayArrow fontSize="small" />,

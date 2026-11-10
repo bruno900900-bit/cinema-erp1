@@ -289,7 +289,7 @@ export default function ProjectLocationsOverview({
         <Paper sx={{ p: 3, mb: 3, borderRadius: 2 }}>
           <ProjectDemandsList
             projectId={Number(projectId)}
-            projectLocations={projectLocations}
+            projectLocations={projectLocations as any}
           />
         </Paper>
       )}
@@ -311,7 +311,7 @@ export default function ProjectLocationsOverview({
         </Alert>
       ) : (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {projectLocations.map((location: ProjectLocation) => {
+          {projectLocations.map(location => {
             const isExpanded = expandedLocationId === location.id;
 
             const responsibleUser = getUserById(location.responsible_user_id);
@@ -546,7 +546,7 @@ export default function ProjectLocationsOverview({
                       <Button
                         size="small"
                         startIcon={<Visibility />}
-                        onClick={() => handleViewDetails(location)}
+                        onClick={() => handleViewDetails(location as any)}
                       >
                         Detalhes
                       </Button>
@@ -554,7 +554,7 @@ export default function ProjectLocationsOverview({
                         <Button
                           size="small"
                           startIcon={<Edit />}
-                          onClick={() => onEditLocation(location)}
+                          onClick={() => onEditLocation(location as any)}
                         >
                           Editar
                         </Button>

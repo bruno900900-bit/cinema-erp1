@@ -45,6 +45,7 @@ export interface SupplierFilter {
   rating_min?: number;
   rating_max?: number;
   has_locations?: boolean | string;
+  is_active?: boolean;
 }
 
 export interface SupplierListResponse {

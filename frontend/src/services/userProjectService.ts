@@ -1,10 +1,12 @@
 import { supabase } from '../config/supabaseClient';
 
+export type AccessLevel = 'viewer' | 'editor' | 'admin';
+
 export interface UserProject {
   id: number;
   user_id: number;
   project_id: number;
-  role?: string;
+  access_level: AccessLevel; // Fixed: was incorrectly named 'role'
   project_name?: string;
   permissions?: Record<string, any>;
   created_at?: string;
@@ -13,7 +15,7 @@ export interface UserProject {
 
 export interface BulkProjectAssignment {
   project_ids: number[];
-  role: string; // Changed from access_level to match database
+  access_level: AccessLevel; // Fixed: was incorrectly named 'role'
 }
 
 export interface UserProjectListResponse {
@@ -25,10 +27,10 @@ export interface UserProjectListResponse {
 export const userProjectService = {
   async getUserProjects(userId: number): Promise<UserProjectListResponse> {
     try {
-      // Ensure userId is treated as a number, not UUID
+      // userId must be integer (matches users.id Integer column)
       const numericUserId = Number(userId);
 
-      if (isNaN(numericUserId)) {
+      if (isNaN(numericUserId) || numericUserId <= 0) {
         console.error('Invalid userId provided:', userId);
         return { user_projects: [], projects: [], total: 0 };
       }
@@ -39,10 +41,10 @@ export const userProjectService = {
         .eq('user_id', numericUserId);
 
       if (error) {
-        console.warn('user_projects table may not exist:', error.message);
+        console.warn('user_projects query error:', error.message);
         return { user_projects: [], projects: [], total: 0 };
       }
-      const userProjects = data || [];
+      const userProjects = (data || []) as UserProject[];
       return {
         user_projects: userProjects,
         projects: userProjects,
@@ -65,7 +67,7 @@ export const userProjectService = {
       .single();
 
     if (error) throw new Error(error.message);
-    return result;
+    return result as UserProject;
   },
 
   async addUserToMultipleProjects(
@@ -107,7 +109,7 @@ export const userProjectService = {
         .eq('project_id', projectId);
 
       if (error) return [];
-      return data || [];
+      return (data || []) as UserProject[];
     } catch (error) {
       return [];
     }
@@ -120,7 +122,7 @@ export const userProjectService = {
     const inserts = data.project_ids.map(project_id => ({
       user_id: userId,
       project_id,
-      role: data.role, // Changed from access_level to role
+      access_level: data.access_level, // Fixed: was 'role', now 'access_level'
     }));
 
     const { error } = await supabase.from('user_projects').insert(inserts);

@@ -81,9 +81,13 @@ class SupabaseAuthService {
    * Obter usuário atual
    */
   getCurrentUser(): SupabaseUser | null {
-    const { data } = supabase.auth.getSession();
-    // This is synchronous, but session might not be loaded yet
-    // Better to use onAuthStateChanged
+    // supabase.auth.getSession() é assíncrono — não há API síncrona para a
+    // sessão atual. Use getCurrentUserAsync()/onAuthStateChange no fluxo real.
+    return null;
+  }
+
+  async getCurrentUserAsync(): Promise<SupabaseUser | null> {
+    const { data } = await supabase.auth.getSession();
     const user = data.session?.user;
     return user ? this.mapUser(user) : null;
   }

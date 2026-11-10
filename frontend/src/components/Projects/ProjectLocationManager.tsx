@@ -120,7 +120,7 @@ export default function ProjectLocationManager({
   // Buscar usuários
   const { data: users = [] } = useQuery({
     queryKey: ['users'],
-    queryFn: () => userService.getUsers(),
+    queryFn: async () => (await userService.getUsers()).users,
   });
 
   // Mutations
@@ -809,7 +809,7 @@ export default function ProjectLocationManager({
                 >
                   {users.map(user => (
                     <MenuItem key={user.id} value={user.id}>
-                      {user.name}
+                      {user.full_name}
                     </MenuItem>
                   ))}
                 </Select>
@@ -830,7 +830,7 @@ export default function ProjectLocationManager({
                 >
                   {users.map(user => (
                     <MenuItem key={user.id} value={user.id}>
-                      {user.name}
+                      {user.full_name}
                     </MenuItem>
                   ))}
                 </Select>

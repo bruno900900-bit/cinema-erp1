@@ -2,7 +2,7 @@ import { useAuth } from './useAuth';
 import { UserRole } from '../types/user';
 
 // Definição das permissões por role
-const ROLE_PERMISSIONS = {
+export const ROLE_PERMISSIONS = {
   [UserRole.ADMIN]: {
     canViewDashboard: true,
     canManageUsers: true,
@@ -211,7 +211,16 @@ export function usePermissions(): Permissions {
   const basePermissions =
     ROLE_PERMISSIONS[user.role] || ROLE_PERMISSIONS[UserRole.CONTRIBUTOR];
 
-  // 2. Aplicar overrides do permissions_json se existir
+  // ✅ CRITICAL FIX: Admin SEMPRE tem todas as permissões
+  // Ignorar permissions_json para evitar bloqueios acidentais
+  if (user.role === UserRole.ADMIN) {
+    console.log(
+      '🔒 Admin detected - granting full access (ignoring custom permissions)'
+    );
+    return basePermissions; // Admin sempre tem acesso total
+  }
+
+  // 2. Aplicar overrides do permissions_json para outros roles
   if (user.permissions_json) {
     return {
       ...basePermissions,

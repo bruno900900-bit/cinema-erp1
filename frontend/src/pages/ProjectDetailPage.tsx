@@ -252,12 +252,12 @@ const ProjectDetailPage: React.FC = () => {
 
       // Fetch fresh location data with all details for the report
       const locations = await projectLocationService.getProjectLocations(
-        project.id
+        Number(project.id)
       );
 
       const { projectReportService } =
         await import('@/services/projectReportService');
-      projectReportService.exportProjectReport(project, locations);
+      projectReportService.exportProjectReport(project, locations as any);
 
       toast.success('Relatório exportado com sucesso!');
     } catch (error) {
@@ -547,7 +547,7 @@ const ProjectDetailPage: React.FC = () => {
                   ? project.id
                   : parseInt(project.id)
               }
-              projectLocations={projectLocations}
+              projectLocations={projectLocations as any}
             />
           </Paper>
 

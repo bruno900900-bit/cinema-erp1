@@ -37,6 +37,7 @@ import {
   userProjectService,
   UserProject,
   BulkProjectAssignment,
+  AccessLevel,
 } from '../../services/userProjectService';
 
 interface UserProjectAccessModalProps {
@@ -46,7 +47,7 @@ interface UserProjectAccessModalProps {
   userName: string;
 }
 
-type AccessLevel = 'viewer' | 'editor' | 'admin';
+// AccessLevel is imported from userProjectService
 
 const accessLevelLabels: Record<AccessLevel, string> = {
   viewer: 'Visualizador',
@@ -164,7 +165,7 @@ export default function UserProjectAccessModal({
     }
     bulkAssignMutation.mutate({
       project_ids: selectedProjects,
-      access_level: accessLevel,
+      access_level: accessLevel, // Correct field name matching DB schema
     });
   };
 

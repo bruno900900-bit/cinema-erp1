@@ -61,6 +61,11 @@ const statusConfig: Record<
     icon: <Pause sx={{ fontSize: 16 }} />,
     color: '#ff9800',
   },
+  [StageStatus.SKIPPED]: {
+    label: 'Pulada',
+    icon: <Cancel sx={{ fontSize: 16 }} />,
+    color: '#bdbdbd',
+  },
   [StageStatus.CANCELLED]: {
     label: 'Cancelada',
     icon: <Cancel sx={{ fontSize: 16 }} />,

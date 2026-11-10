@@ -309,8 +309,8 @@ const ProjectReportsPage: React.FC = () => {
                   <TableBody>
                     {project.locations.map(location => (
                       <TableRow key={location.id}>
-                        <TableCell>{location.name}</TableCell>
-                        <TableCell>{location.address}</TableCell>
+                        <TableCell>{location.location?.title || '-'}</TableCell>
+                        <TableCell>{location.location?.city || '-'}</TableCell>
                         <TableCell align="right">
                           {formatCurrency(location.total_cost || 0)}
                         </TableCell>
@@ -321,7 +321,7 @@ const ProjectReportsPage: React.FC = () => {
                             color={
                               location.status === 'confirmed'
                                 ? 'success'
-                                : location.status === 'pending'
+                                : location.status === 'reserved'
                                 ? 'warning'
                                 : 'default'
                             }

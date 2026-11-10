@@ -60,6 +60,9 @@ export interface UserCreate {
   phone?: string;
   bio?: string;
   permissions_json?: Record<string, boolean>;
+  timezone?: string;
+  locale?: string;
+  is_active?: boolean;
 }
 
 export interface UserUpdate {
@@ -71,6 +74,9 @@ export interface UserUpdate {
   is_active?: boolean;
   permissions_json?: Record<string, unknown>;
   avatar_url?: string;
+  password?: string;
+  timezone?: string;
+  locale?: string;
 }
 
 export interface UserPasswordChange {
@@ -118,6 +124,8 @@ export interface Location {
   description?: string;
   status: LocationStatus;
   sector_types?: SectorType[]; // Array para múltiplos setores
+  sector_type?: SectorType; // Setor principal (compatibilidade)
+  cover_photo_url?: string; // URL da foto de capa
   space_type: SpaceType;
   supplier_id?: number | null;
   price_day_cinema?: number;
@@ -154,6 +162,8 @@ export enum LocationStatus {
   PROSPECTING = 'prospecting',
   PENDING_APPROVAL = 'pending_approval',
   APPROVED = 'approved',
+  SCHEDULED = 'scheduled',
+  COMPLETED = 'completed',
   ARCHIVED = 'archived',
 }
 
@@ -171,7 +181,30 @@ export enum SpaceType {
   AREA = 'area',
 }
 
-// AdvancedSearchParams moved to locationService.ts
+// Parâmetros de busca/filtros usados pelos formulários de locação (formato achatado)
+export interface AdvancedSearchParams {
+  title?: string;
+  status?: LocationStatus;
+  sector_type?: SectorType;
+  space_type?: SpaceType;
+  supplier_id?: number;
+  city?: string;
+  state?: string;
+  country?: string;
+  min_price?: number;
+  max_price?: number;
+  min_capacity?: number;
+  max_capacity?: number;
+  available_from?: string;
+  available_to?: string;
+  has_parking?: boolean;
+  has_electricity?: boolean;
+  has_water?: boolean;
+  has_bathroom?: boolean;
+  has_kitchen?: boolean;
+  has_air_conditioning?: boolean;
+  tags?: any[];
+}
 
 export interface Supplier {
   id: number;
@@ -257,8 +290,8 @@ export interface ProjectTask {
   type: TaskType;
   status: TaskStatus;
   assigned_to?: string;
-  due_date?: Date;
-  completed_at?: Date;
+  due_date?: Date | string;
+  completed_at?: Date | string;
   completed?: boolean; // Computed: true se completed_at existe
   notes?: string;
   priority?: string;
@@ -360,8 +393,10 @@ export enum TaskType {
 }
 
 export enum TaskStatus {
+  NOT_STARTED = 'not_started',
   PENDING = 'pending',
   IN_PROGRESS = 'in_progress',
+  ON_HOLD = 'on_hold',
   COMPLETED = 'completed',
   CANCELLED = 'cancelled',
 }

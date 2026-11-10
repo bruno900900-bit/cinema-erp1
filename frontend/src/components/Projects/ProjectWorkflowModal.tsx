@@ -287,8 +287,10 @@ export default function ProjectWorkflowModal({
       | 'success'
       | 'warning'
     > = {
+      [TaskStatus.NOT_STARTED]: 'default',
       [TaskStatus.PENDING]: 'default',
       [TaskStatus.IN_PROGRESS]: 'warning',
+      [TaskStatus.ON_HOLD]: 'info',
       [TaskStatus.COMPLETED]: 'success',
       [TaskStatus.CANCELLED]: 'error',
     };
@@ -297,8 +299,10 @@ export default function ProjectWorkflowModal({
 
   const getStatusLabel = (status: TaskStatus) => {
     const labels: Record<TaskStatus, string> = {
+      [TaskStatus.NOT_STARTED]: 'Não Iniciada',
       [TaskStatus.PENDING]: 'Pendente',
       [TaskStatus.IN_PROGRESS]: 'Em Andamento',
+      [TaskStatus.ON_HOLD]: 'Em Pausa',
       [TaskStatus.COMPLETED]: 'Concluída',
       [TaskStatus.CANCELLED]: 'Cancelada',
     };

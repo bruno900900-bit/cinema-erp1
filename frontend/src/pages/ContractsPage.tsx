@@ -112,10 +112,10 @@ const ContractsPage: React.FC = () => {
     queryFn: () => userService.getUsers(),
   });
 
-  // Buscar projetos com locações
+  // Buscar apenas projetos do usuário logado (filtrado por atribuições)
   const { data: projects = [] } = useQuery({
     queryKey: ['projects'],
-    queryFn: projectService.getProjects,
+    queryFn: projectService.getProjectsForCurrentUser,
   });
 
   const suppliers = suppliersResponse?.suppliers || [];
@@ -393,7 +393,7 @@ const ContractsPage: React.FC = () => {
                     <Tooltip title="Excluir">
                       <IconButton
                         size="small"
-                        onClick={() => handleDeleteContract(contract.id)}
+                        onClick={() => handleDeleteContract(String(contract.id))}
                         color="error"
                       >
                         <DeleteIcon />

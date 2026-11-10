@@ -149,7 +149,12 @@ class FileService {
         path: parentPath ? `${parentPath}/${file.name}` : file.name,
         project_id: projectId,
         mime_type: file.type,
-        file_type: this.getFileTypeFromMime(file.type),
+        file_type: this.getFileTypeFromMime(file.type) as
+          | 'location'
+          | 'image'
+          | 'other'
+          | 'document'
+          | 'contract',
         status: 'pending',
         url: URL.createObjectURL(file), // Simular URL do arquivo
       };

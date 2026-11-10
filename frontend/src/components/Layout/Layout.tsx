@@ -32,6 +32,7 @@ import {
   AccountCircle,
   Notifications,
   Search,
+  Security,
 } from '@mui/icons-material';
 import NotificationCenter from '../Common/NotificationCenter';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -93,6 +94,12 @@ const menuItems = [
     icon: <People />,
     path: '/users',
     permission: 'canManageUsers',
+  },
+  {
+    text: 'Cargos',
+    icon: <Security />,
+    path: '/admin/roles',
+    permission: 'canManageUserRoles',
   },
   {
     text: 'Arquivos',

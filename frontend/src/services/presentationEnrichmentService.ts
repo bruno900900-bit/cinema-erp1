@@ -1,7 +1,10 @@
 // Presentation Enrichment Service - Migrated to mock
 // AI enrichment requires backend processing
 
-export const enrichPresentation = async (data: any): Promise<any> => {
+export const enrichPresentation = async (
+  data: any,
+  _options?: any
+): Promise<any> => {
   console.warn('AI enrichment not available during migration');
   return data; // Return unchanged data
 };
@@ -11,4 +14,16 @@ export const exportEnrichedPresentation = async (data: any): Promise<Blob> => {
   throw new Error('Exportação de apresentação temporariamente indisponível');
 };
 
-export default { enrichPresentation, exportEnrichedPresentation };
+// Alias usado pelo builder de apresentações (export server-side)
+export const exportServerPresentation = async (
+  data: any,
+  _serverSide?: boolean
+): Promise<Blob> => {
+  return exportEnrichedPresentation(data);
+};
+
+export default {
+  enrichPresentation,
+  exportEnrichedPresentation,
+  exportServerPresentation,
+};

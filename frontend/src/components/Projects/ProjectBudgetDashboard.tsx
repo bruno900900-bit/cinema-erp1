@@ -49,7 +49,7 @@ export default function ProjectBudgetDashboard({
   const { data: locations = [], isLoading } = useQuery({
     queryKey: ['project-locations', projectId],
     queryFn: () =>
-      projectLocationService.getProjectLocationsByProject(projectId),
+      projectLocationService.getProjectLocations(projectId),
     enabled: !!projectId,
   });
 
@@ -71,7 +71,7 @@ export default function ProjectBudgetDashboard({
 
   const handleExportExcel = () => {
     // Prepare data for Excel
-    const exportData = locations.map((loc, index) => ({
+    const exportData: Record<string, any>[] = locations.map((loc, index) => ({
       '#': index + 1,
       'Nome da Locação': loc.location?.title || `Locação ${loc.location_id}`,
       'Valor (R$)': loc.total_cost || loc.daily_rate || 0,

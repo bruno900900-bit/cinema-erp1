@@ -104,7 +104,7 @@ export default function UserManagement() {
     try {
       setLoading(true);
       const usersData = await userService.getUsersList();
-      setUsers(usersData);
+      setUsers(usersData as unknown as User[]);
     } catch (err: any) {
       setError(err.message || 'Erro ao carregar usuários');
     } finally {

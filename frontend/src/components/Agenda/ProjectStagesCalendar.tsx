@@ -116,7 +116,7 @@ export default function ProjectStagesCalendar({
             start: startDate,
             end: endDate,
             stage,
-            projectLocation: stage.project_location as any,
+            projectLocation: (stage as any).project_location,
             color: getStageColor(stage),
             type: stage.is_milestone ? 'milestone' : 'stage',
           });
@@ -131,7 +131,7 @@ export default function ProjectStagesCalendar({
             start: deadlineDate,
             end: deadlineDate,
             stage,
-            projectLocation: stage.project_location as any,
+            projectLocation: (stage as any).project_location,
             color: stage.is_overdue ? '#f44336' : '#ff9800',
             type: 'deadline',
           });
@@ -172,6 +172,7 @@ export default function ProjectStagesCalendar({
       [StageStatus.COMPLETED]: 'Concluída',
       [StageStatus.CANCELLED]: 'Cancelada',
       [StageStatus.ON_HOLD]: 'Em Espera',
+      [StageStatus.SKIPPED]: 'Pulada',
     };
     return labels[status] || status;
   };

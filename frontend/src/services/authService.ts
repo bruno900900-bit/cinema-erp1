@@ -20,7 +20,8 @@ interface SignUpRequest {
 class AuthService {
   async signUp(data: SignUpRequest): Promise<void> {
     try {
-      const { error } = await supabase.auth.signUp({
+      // Step 1: Create user in Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
         options: {
@@ -30,7 +31,36 @@ class AuthService {
         },
       });
 
-      if (error) throw error;
+      if (authError) throw authError;
+      if (!authData.user) {
+        throw new Error('Falha ao criar usuário no sistema de autenticação');
+      }
+
+      console.log('✅ Auth user created:', authData.user.id);
+
+      // Step 2: Create user record in database
+      const { error: dbError } = await supabase.from('users').insert([
+        {
+          auth_id: authData.user.id,
+          email: data.email,
+          full_name: data.full_name,
+          role: 'viewer', // Default role for self-registration
+          is_active: false, // Requires admin approval
+          password_hash: 'managed_by_supabase_auth',
+          permissions_json: {},
+          timezone: 'America/Sao_Paulo',
+          locale: 'pt-BR',
+        },
+      ]);
+
+      if (dbError) {
+        console.error('❌ Failed to create database record:', dbError);
+        // Note: Auth user was created but DB record failed
+        // Consider implementing cleanup or manual intervention
+        throw new Error('Falha ao completar o cadastro. Contate o suporte.');
+      }
+
+      console.log('✅ User registered successfully in database:', data.email);
     } catch (error: any) {
       console.error('Erro no cadastro (Supabase):', error);
       throw new Error('Não foi possível criar a conta: ' + error.message);

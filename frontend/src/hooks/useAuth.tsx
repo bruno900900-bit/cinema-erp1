@@ -8,6 +8,7 @@ import {
 } from 'react';
 import { User, UserRole } from '../types/user';
 import { supabase } from '../config/supabaseClient';
+import { isAdminCreatingUser } from '../services/userService';
 
 // Build timestamp: 2025-12-11T03:20:00 - Forces new hash
 console.log('[Auth] Build: 2025-12-11T03:22');
@@ -95,6 +96,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       // Skip initial session event if we haven't initialized
       if (event === 'INITIAL_SESSION' && !initializedRef.current) {
+        return;
+      }
+
+      // 🚩 Ignora eventos disparados durante criação de usuário pelo admin
+      // O signUp() dispara SIGNED_IN com a sessão do novo usuário, o que causaria
+      // o admin a ser redirecionado para a conta recém-criada
+      if (isAdminCreatingUser) {
+        console.log(
+          '🚩 [Auth] Evento de auth ignorado (admin criando usuário):',
+          event
+        );
         return;
       }
 

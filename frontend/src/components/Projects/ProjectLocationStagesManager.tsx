@@ -606,7 +606,9 @@ export default function ProjectLocationStagesManager({
                           value={editingStage.responsible_user_id || ''}
                           onChange={e =>
                             handleUpdateStage(editingStage.id, {
-                              responsible_user_id: e.target.value || null,
+                              responsible_user_id: e.target.value
+                                ? Number(e.target.value)
+                                : null,
                             })
                           }
                         >

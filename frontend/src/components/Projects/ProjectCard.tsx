@@ -33,7 +33,6 @@ interface ProjectCardProps {
   onView: (project: Project) => void;
   onEdit: (project: Project) => void;
   onDelete: (project: Project) => void;
-  onWorkflow: (project: Project) => void;
   onViewInAgenda: (project: Project) => void;
 }
 
@@ -43,7 +42,6 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
   onView,
   onEdit,
   onDelete,
-  onWorkflow,
   onViewInAgenda,
 }) => {
   const getStatusColor = (status: ProjectStatus | string) => {
@@ -259,15 +257,6 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
               color="primary"
             >
               <Edit />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Workflow">
-            <IconButton
-              onClick={() => onWorkflow(project)}
-              size="small"
-              color="secondary"
-            >
-              <Assignment />
             </IconButton>
           </Tooltip>
 

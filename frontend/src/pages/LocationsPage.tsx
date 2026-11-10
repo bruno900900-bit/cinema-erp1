@@ -713,8 +713,8 @@ export default function LocationsPage() {
 
               {showAdvancedSearch && (
                 <AdvancedSearchForm
-                  filters={selectedFilters}
-                  onFiltersChange={handleFilterChange}
+                  filters={selectedFilters as any}
+                  onFiltersChange={handleFilterChange as any}
                   onClearFilters={handleClearFilters}
                   tags={tags.map(tag => ({
                     id: tag.id,
@@ -726,7 +726,7 @@ export default function LocationsPage() {
 
             {/* Filtros Ativos */}
             <LocationFilters
-              activeFilters={selectedFilters}
+              activeFilters={selectedFilters as any}
               onRemoveFilter={(key: string | number | symbol) => {
                 const newFilters = { ...selectedFilters };
                 delete newFilters[key as keyof AdvancedSearchParams];
