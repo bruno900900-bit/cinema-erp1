@@ -67,38 +67,22 @@ const ContractsPage: React.FC = () => {
     useState<GeneratedContract | null>(null);
   const [selectedProject, setSelectedProject] = useState<any>(null);
 
-  // Simular dados de contratos (em um sistema real, isso viria do backend)
-  const mockContracts: GeneratedContract[] = [
-    {
-      id: 'CONTRACT_001',
-      title: 'Contrato de Locação de Imóvel - Projeto Filme A',
-      content: 'CONTRATO DE LOCAÇÃO...',
-      generated_at: '2024-01-15',
-      project_id: 1,
-      supplier_id: 1,
-      status: 'approved',
-      pdf_url: 'contract_001.pdf',
-    },
-    {
-      id: 'CONTRACT_002',
-      title: 'Contrato de Locação de Equipamentos - Projeto Comercial B',
-      content: 'CONTRATO DE LOCAÇÃO DE EQUIPAMENTOS...',
-      generated_at: '2024-01-20',
-      project_id: 2,
-      supplier_id: 2,
-      status: 'draft',
-    },
-    {
-      id: 'CONTRACT_003',
-      title: 'Contrato de Prestação de Serviços - Projeto Documentário C',
-      content: 'CONTRATO DE PRESTAÇÃO DE SERVIÇOS...',
-      generated_at: '2024-02-01',
-      project_id: 3,
-      supplier_id: 3,
-      status: 'signed',
-      pdf_url: 'contract_003.pdf',
-    },
-  ];
+  // Buscar contratos reais da base (tabela "contracts" no Supabase)
+  const { data: rawContracts = [] } = useQuery({
+    queryKey: ['contracts'],
+    queryFn: () => contractService.getContracts(),
+  });
+
+  // Mapear o registro armazenado para o formato exibido na tabela
+  const contracts: GeneratedContract[] = rawContracts.map(c => ({
+    id: c.id,
+    title: c.title,
+    content: c.terms || c.description || '',
+    generated_at: c.created_at || '',
+    status: (c.status as any) || 'draft',
+    project_id: c.project_id,
+    supplier_id: c.supplier_id,
+  }));
 
   // Buscar fornecedores
   const { data: suppliersResponse } = useQuery({
@@ -122,7 +106,7 @@ const ContractsPage: React.FC = () => {
   const users = usersResponse?.users || [];
 
   // Filtrar contratos
-  const filteredContracts = mockContracts.filter(contract => {
+  const filteredContracts = contracts.filter(contract => {
     const matchesSearch = contract.title
       .toLowerCase()
       .includes(searchTerm.toLowerCase());
@@ -258,7 +242,7 @@ const ContractsPage: React.FC = () => {
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                 <ContractIcon color="primary" sx={{ fontSize: 40 }} />
                 <Box>
-                  <Typography variant="h4">{mockContracts.length}</Typography>
+                  <Typography variant="h4">{contracts.length}</Typography>
                   <Typography variant="body2" color="text.secondary">
                     Total de Contratos
                   </Typography>
@@ -274,7 +258,7 @@ const ContractsPage: React.FC = () => {
                 <BusinessIcon color="success" sx={{ fontSize: 40 }} />
                 <Box>
                   <Typography variant="h4">
-                    {mockContracts.filter(c => c.status === 'signed').length}
+                    {contracts.filter(c => c.status === 'signed').length}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
                     Contratos Assinados
@@ -291,7 +275,7 @@ const ContractsPage: React.FC = () => {
                 <CalendarIcon color="warning" sx={{ fontSize: 40 }} />
                 <Box>
                   <Typography variant="h4">
-                    {mockContracts.filter(c => c.status === 'review').length}
+                    {contracts.filter(c => c.status === 'review').length}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
                     Em Revisão

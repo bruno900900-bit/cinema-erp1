@@ -53,13 +53,18 @@ module.exports = defineConfig({
 
     chunkSizeWarningLimit: 1000, // 1MB
     minify: 'terser',
+    // Remove console.* e debugger no build de produção (minificação terser)
+    terserOptions: {
+      compress: {
+        drop_console: true,
+        drop_debugger: true,
+      },
+    },
     cssCodeSplit: true,
   },
 
   esbuild: {
     logOverride: { 'this-is-undefined-in-esm': 'silent' },
-    // Remove console.log em produção (desabilitado temporariamente devido a erro de build)
-    // drop: process.env.NODE_ENV === 'production' ? ['console', 'debugger'] : [],
   },
 
   define: {

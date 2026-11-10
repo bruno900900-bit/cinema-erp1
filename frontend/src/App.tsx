@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Box, Typography, Alert } from '@mui/material';
 import { ToastContainer } from 'react-toastify';
@@ -8,27 +8,30 @@ import { useAuth } from './hooks/useAuth';
 import Layout from './components/Layout/Layout';
 import LoginPage from './pages/LoginPage';
 import QuickSetupPage from './pages/QuickSetupPage';
-import DashboardPage from './pages/DashboardPage';
-import LocationsPage from './pages/LocationsPage';
-import LocationDetailPage from './pages/LocationDetailPage';
-import ProjectsPage from './pages/ProjectsPage';
-import ProjectDetailPage from './pages/ProjectDetailPage';
-import ProjectWorkflowPage from './pages/ProjectWorkflowPage';
-import ProjectReportsPage from './pages/ProjectReportsPage';
-import ContractsPage from './pages/ContractsPage';
-import AgendaPage from './pages/AgendaPage';
-import UsersPage from './pages/UsersPage';
-import FilesPage from './pages/FilesPage';
-import SettingsPage from './pages/SettingsPage';
-import ProfilePage from './pages/ProfilePage';
-import ReportsPage from './pages/ReportsPage';
-import TagsPage from './pages/TagsPage';
-import MyDemandsPage from './pages/MyDemandsPage';
-import AdminRolesPage from './pages/AdminRolesPage';
-import UnauthorizedPage from './pages/UnauthorizedPage';
 import LoadingSpinner from './components/Common/LoadingSpinner';
 import ProtectedRoute from './components/Common/ProtectedRoute';
 import { setupService, SetupStatus } from './services/setupService';
+
+// Páginas carregadas sob demanda (code-splitting por rota) para reduzir o
+// tamanho do bundle inicial.
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const LocationsPage = lazy(() => import('./pages/LocationsPage'));
+const LocationDetailPage = lazy(() => import('./pages/LocationDetailPage'));
+const ProjectsPage = lazy(() => import('./pages/ProjectsPage'));
+const ProjectDetailPage = lazy(() => import('./pages/ProjectDetailPage'));
+const ProjectWorkflowPage = lazy(() => import('./pages/ProjectWorkflowPage'));
+const ProjectReportsPage = lazy(() => import('./pages/ProjectReportsPage'));
+const ContractsPage = lazy(() => import('./pages/ContractsPage'));
+const AgendaPage = lazy(() => import('./pages/AgendaPage'));
+const UsersPage = lazy(() => import('./pages/UsersPage'));
+const FilesPage = lazy(() => import('./pages/FilesPage'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+const ReportsPage = lazy(() => import('./pages/ReportsPage'));
+const TagsPage = lazy(() => import('./pages/TagsPage'));
+const MyDemandsPage = lazy(() => import('./pages/MyDemandsPage'));
+const AdminRolesPage = lazy(() => import('./pages/AdminRolesPage'));
+const UnauthorizedPage = lazy(() => import('./pages/UnauthorizedPage'));
 
 function App() {
   console.log('🚀 App component rendering...');
@@ -88,6 +91,7 @@ function App() {
         />
         <Box sx={{ display: 'flex', minHeight: '100vh' }}>
           <Layout>
+            <Suspense fallback={<LoadingSpinner />}>
             <Routes>
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route
@@ -233,6 +237,7 @@ function App() {
                 element={<Navigate to="/dashboard" replace />}
               />
             </Routes>
+            </Suspense>
           </Layout>
         </Box>
       </>
