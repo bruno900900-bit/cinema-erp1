@@ -5,7 +5,18 @@ export interface ProjectLocation {
   id: number;
   project_id: number;
   location_id: number;
-  status: 'pending' | 'confirmed' | 'in_use' | 'completed' | 'cancelled';
+  status:
+    | 'pending'
+    | 'reserved'
+    | 'confirmed'
+    | 'in_use'
+    | 'returned'
+    | 'completed'
+    | 'overdue'
+    | 'cancelled';
+  completion_percentage?: number;
+  is_overdue?: boolean;
+  duration_days?: number;
   rental_start?: string; // Date string YYYY-MM-DD
   rental_end?: string; // Date string YYYY-MM-DD
   rental_start_date?: string; // Alias for compatibility
@@ -55,6 +66,8 @@ export interface ProjectLocationCreate {
   project_id: number;
   location_id: number;
   status?: string;
+  rental_start?: string; // Alias de rental_start_date
+  rental_end?: string; // Alias de rental_end_date
   rental_start_date?: string; // Mapped to rental_start
   rental_end_date?: string; // Mapped to rental_end
   rental_start_time?: string;

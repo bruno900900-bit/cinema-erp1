@@ -114,8 +114,8 @@ const EventCreationModal: React.FC<EventCreationModalProps> = ({
       description: description.trim() || undefined,
       start: startDateTime,
       end: endDateTime,
-      type: eventType,
-      category: getCategoryForType(eventType),
+      type: eventType as AgendaEvent['type'],
+      category: getCategoryForType(eventType) as AgendaEvent['category'],
       priority,
       isAllDay,
       projectId: selectedProject || undefined,
@@ -405,7 +405,7 @@ const EventCreationModal: React.FC<EventCreationModalProps> = ({
                     <MenuItem value="">Nenhum</MenuItem>
                     {users.map(user => (
                       <MenuItem key={user.id} value={user.id}>
-                        {user.name}
+                        {user.full_name}
                       </MenuItem>
                     ))}
                   </Select>
@@ -441,7 +441,7 @@ const EventCreationModal: React.FC<EventCreationModalProps> = ({
                     <MenuItem value="">Nenhum</MenuItem>
                     {users.map(user => (
                       <MenuItem key={user.id} value={user.id}>
-                        {user.name}
+                        {user.full_name}
                       </MenuItem>
                     ))}
                   </Select>
@@ -481,7 +481,7 @@ const EventCreationModal: React.FC<EventCreationModalProps> = ({
                     <MenuItem value="">Nenhum</MenuItem>
                     {users.map(user => (
                       <MenuItem key={user.id} value={user.id}>
-                        {user.name}
+                        {user.full_name}
                       </MenuItem>
                     ))}
                   </Select>
@@ -517,7 +517,7 @@ const EventCreationModal: React.FC<EventCreationModalProps> = ({
                     <MenuItem value="">Nenhum</MenuItem>
                     {users.map(user => (
                       <MenuItem key={user.id} value={user.id}>
-                        {user.name}
+                        {user.full_name}
                       </MenuItem>
                     ))}
                   </Select>

@@ -205,7 +205,7 @@ const AgendaPage: React.FC = () => {
 
   const { data: projects = [] } = useQuery({
     queryKey: ['projects'],
-    queryFn: () => projectService.getProjects(),
+    queryFn: () => projectService.getProjectsForCurrentUser(),
     enabled: isEventModalOpen,
     staleTime: 5 * 60 * 1000,
   });
@@ -372,10 +372,10 @@ const AgendaPage: React.FC = () => {
           eventData.priority === 'critical'
             ? 4
             : eventData.priority === 'high'
-            ? 3
-            : eventData.priority === 'medium'
-            ? 2
-            : 1,
+              ? 3
+              : eventData.priority === 'medium'
+                ? 2
+                : 1,
       };
 
       await createEventMutation.mutateAsync(apiEventData);
@@ -673,10 +673,10 @@ const AgendaPage: React.FC = () => {
                   background: day.isToday
                     ? `linear-gradient(135deg, ${colors.primary} 0%, ${colors.primaryDark} 100%)`
                     : day.isCurrentMonth
-                    ? day.isWeekend
-                      ? alpha(colors.neutral[800], 0.8) // Escuro para fim de semana
-                      : colors.neutral[800] // Background escuro para dias úteis
-                    : colors.neutral[900], // Mais escuro para fora do mês
+                      ? day.isWeekend
+                        ? alpha(colors.neutral[800], 0.8) // Escuro para fim de semana
+                        : colors.neutral[800] // Background escuro para dias úteis
+                      : colors.neutral[900], // Mais escuro para fora do mês
                   border: day.isToday
                     ? 'none'
                     : `1px solid ${
@@ -712,8 +712,8 @@ const AgendaPage: React.FC = () => {
                       color: day.isToday
                         ? 'white'
                         : day.isCurrentMonth
-                        ? 'white' // Texto branco no tema escuro
-                        : colors.neutral[500],
+                          ? 'white' // Texto branco no tema escuro
+                          : colors.neutral[500],
                     }}
                   >
                     {day.date.getDate()}
@@ -1175,10 +1175,10 @@ const AgendaPage: React.FC = () => {
                                 event.priority === 'critical'
                                   ? 'error'
                                   : event.priority === 'high'
-                                  ? 'warning'
-                                  : event.priority === 'medium'
-                                  ? 'info'
-                                  : 'success'
+                                    ? 'warning'
+                                    : event.priority === 'medium'
+                                      ? 'info'
+                                      : 'success'
                               }
                             />
                           </Box>
@@ -1606,8 +1606,8 @@ const AgendaPage: React.FC = () => {
         open={isDateDetailOpen}
         onClose={() => setIsDateDetailOpen(false)}
         date={expandedDate}
-        events={expandedDate ? getEventsForDay(expandedDate) : []}
-        onEventClick={handleEventClick}
+        events={(expandedDate ? getEventsForDay(expandedDate) : []) as any}
+        onEventClick={handleEventClick as any}
         onAddTask={handleCreateEvent}
       />
 

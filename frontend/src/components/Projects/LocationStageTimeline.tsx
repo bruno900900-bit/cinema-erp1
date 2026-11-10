@@ -19,7 +19,7 @@ interface LocationStageTimelineProps {
   maxStages?: number;
 }
 
-const getStatusIcon = (status: StageStatus) => {
+const getStatusIcon = (status: StageStatus | string) => {
   const iconProps = { fontSize: 'small' as const };
 
   switch (status) {
@@ -37,7 +37,7 @@ const getStatusIcon = (status: StageStatus) => {
 };
 
 const getStatusColor = (
-  status: StageStatus
+  status: StageStatus | string
 ): 'success' | 'warning' | 'error' | 'default' => {
   switch (status) {
     case 'completed':
@@ -51,12 +51,14 @@ const getStatusColor = (
   }
 };
 
-const getStatusLabel = (status: StageStatus): string => {
-  const labels: Record<StageStatus, string> = {
+const getStatusLabel = (status: StageStatus | string): string => {
+  const labels: Record<string, string> = {
     pending: 'Pendente',
     in_progress: 'Em Progresso',
     completed: 'Concluída',
     blocked: 'Bloqueada',
+    on_hold: 'Em Espera',
+    skipped: 'Pulada',
     cancelled: 'Cancelada',
   };
   return labels[status] || status;

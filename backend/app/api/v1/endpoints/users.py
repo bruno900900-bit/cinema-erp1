@@ -398,3 +398,111 @@ def remove_project_access(
     db.commit()
 
     return {"message": "Acesso removido com sucesso"}
+
+
+# ==================== USER PERMISSIONS ENDPOINTS ====================
+
+@router.get("/{user_id}/permissions")
+def get_user_permissions(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_admin_user)
+):
+    """Obtém as permissões efetivas de um usuário (role + custom) (apenas admin)"""
+    from ....core.auth import get_role_default_permissions
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+    # Permissões base do role
+    base_permissions = get_role_default_permissions(user.role)
+
+    # Permissões customizadas
+    custom_permissions = user.permissions_json if user.permissions_json else {}
+
+    # Permissões efetivas (custom override base)
+    effective_permissions = {**base_permissions, **custom_permissions}
+
+    return {
+        "user_id": user.id,
+        "role": user.role.value,
+        "base_permissions": base_permissions,
+        "custom_permissions": custom_permissions,
+        "effective_permissions": effective_permissions
+    }
+
+
+@router.put("/{user_id}/permissions")
+def update_user_permissions(
+    user_id: int,
+    permissions: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_admin_user)
+):
+    """Atualiza as permissões customizadas de um usuário (apenas admin)"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+    # Registrar mudança no audit log
+    from ....models.audit_log import AuditLog
+    audit_entry = AuditLog(
+        actor_user_id=current_user.id,
+        entity="user",
+        entity_id=user_id,
+        action="permission_change",
+        before_json=user.permissions_json,
+        after_json=permissions
+    )
+    db.add(audit_entry)
+
+    # Atualizar permissões
+    user.permissions_json = permissions
+    db.commit()
+    db.refresh(user)
+
+    return {
+        "message": "Permissões atualizadas com sucesso",
+        "user_id": user.id,
+        "permissions": user.permissions_json
+    }
+
+
+@router.post("/{user_id}/permissions/reset")
+def reset_user_permissions(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_admin_user)
+):
+    """Restaura as permissões de um usuário para os padrões do role (apenas admin)"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+    # Registrar mudança no audit log
+    from ....models.audit_log import AuditLog
+    audit_entry = AuditLog(
+        actor_user_id=current_user.id,
+        entity="user",
+        entity_id=user_id,
+        action="permission_change",
+        before_json=user.permissions_json,
+        after_json=None
+    )
+    db.add(audit_entry)
+
+    # Resetar permissões
+    user.permissions_json = None
+    db.commit()
+    db.refresh(user)
+
+    from ....core.auth import get_role_default_permissions
+    default_permissions = get_role_default_permissions(user.role)
+
+    return {
+        "message": "Permissões restauradas para os padrões do role",
+        "user_id": user.id,
+        "role": user.role.value,
+        "default_permissions": default_permissions
+    }

@@ -16,6 +16,7 @@ export enum EventType {
   DELIVERY = 'delivery',
   CONTRACT_SIGNED = 'contract_signed',
   PAYMENT_DUE = 'payment_due',
+  DEMAND_DUE = 'demand_due', // NEW: Demand due date
   CUSTOM = 'custom',
 }
 
@@ -271,6 +272,19 @@ export const agendaEventService = {
     } catch (error) {
       return [];
     }
+  },
+
+  // Geração de eventos de agenda a partir de uma locação de projeto.
+  // A geração automática depende de regras de negócio/backend; mantém-se
+  // como no-op seguro para não quebrar o fluxo de criação de locações.
+  async generateEventsFromProjectLocation(
+    projectLocationId: number
+  ): Promise<AgendaEvent[]> {
+    console.warn(
+      'generateEventsFromProjectLocation: geração automática ainda não implementada no Supabase',
+      projectLocationId
+    );
+    return [];
   },
 };
 

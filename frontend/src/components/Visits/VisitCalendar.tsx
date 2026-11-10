@@ -136,7 +136,7 @@ const VisitCalendar: React.FC<VisitCalendarProps> = ({
     borderColor: getStatusColor(visit.status),
     extendedProps: {
       status: visit.status,
-      location: locations.find(l => l.id === visit.locationId)?.title,
+      location: locations.find(l => String(l.id) === String(visit.locationId))?.title,
       user: users.find(u => u.id === visit.userId)?.name,
     },
   }));
@@ -286,7 +286,7 @@ const VisitCalendar: React.FC<VisitCalendarProps> = ({
                 />
               </Box>
               <Typography variant="body2">
-                <strong>Local:</strong> {locations.find(l => l.id === selectedVisit.locationId)?.title}
+                <strong>Local:</strong> {locations.find(l => String(l.id) === String(selectedVisit.locationId))?.title}
               </Typography>
               <Typography variant="body2">
                 <strong>Responsável:</strong> {users.find(u => u.id === selectedVisit.userId)?.name}

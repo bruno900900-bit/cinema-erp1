@@ -104,7 +104,7 @@ const ProjectsPage: React.FC = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isContractDialogOpen, setIsContractDialogOpen] = useState(false);
   const [isLocationSelectionOpen, setIsLocationSelectionOpen] = useState(false);
   const [isWorkflowOpen, setIsWorkflowOpen] = useState(false);
@@ -137,10 +137,10 @@ const ProjectsPage: React.FC = () => {
 
   const queryClient = useQueryClient();
 
-  // Buscar projetos com cache otimizado
+  // Buscar projetos do usuário atual (filtrado por atribuições para não-admins)
   const { data: projects = [], isLoading: projectsLoading } = useQuery({
     queryKey: ['projects'],
-    queryFn: projectService.getProjects,
+    queryFn: projectService.getProjectsForCurrentUser,
     staleTime: 5 * 60 * 1000, // 5 minutos
     gcTime: 10 * 60 * 1000, // 10 minutos
     refetchOnWindowFocus: false,
@@ -226,8 +226,13 @@ const ProjectsPage: React.FC = () => {
     mutationFn: projectService.deleteProject,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
-      setIsViewDialogOpen(false);
+      setIsDeleteDialogOpen(false);
       setSelectedProject(null);
+      toast.success('Projeto excluído com sucesso!');
+    },
+    onError: (error: any) => {
+      console.error('Erro ao excluir projeto:', error);
+      toast.error(error.message || 'Erro ao excluir projeto. Tente novamente.');
     },
   });
 
@@ -582,11 +587,7 @@ const ProjectsPage: React.FC = () => {
                     }}
                     onDelete={project => {
                       setSelectedProject(project);
-                      setIsViewDialogOpen(true);
-                    }}
-                    onWorkflow={project => {
-                      setSelectedProject(project);
-                      setIsWorkflowOpen(true);
+                      setIsDeleteDialogOpen(true);
                     }}
                     onViewInAgenda={handleViewInAgenda}
                   />
@@ -661,7 +662,7 @@ const ProjectsPage: React.FC = () => {
                           <IconButton
                             onClick={() => {
                               setSelectedProject(project);
-                              setIsViewDialogOpen(true);
+                              setIsDeleteDialogOpen(true);
                             }}
                             size="small"
                             color="error"
@@ -984,124 +985,96 @@ const ProjectsPage: React.FC = () => {
         </DialogActions>
       </Dialog>
 
-      {/* Dialog para visualizar projeto */}
+      {/* Dialog para confirmar exclusão de projeto */}
       <Dialog
-        open={isViewDialogOpen}
-        onClose={() => setIsViewDialogOpen(false)}
-        maxWidth="md"
+        open={isDeleteDialogOpen}
+        onClose={() => setIsDeleteDialogOpen(false)}
+        maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>
-          <Box
-            sx={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-            }}
-          >
-            Detalhes do Projeto
-            <Box>
-              <Tooltip title="Editar">
-                <IconButton
-                  onClick={() => {
-                    setFormData(selectedProject || {});
-                    setIsViewDialogOpen(false);
-                    setIsEditDialogOpen(true);
-                  }}
-                  size="small"
-                >
-                  <Edit />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Excluir">
-                <IconButton
-                  onClick={handleDeleteProject}
-                  size="small"
-                  color="error"
-                >
-                  <Delete />
-                </IconButton>
-              </Tooltip>
-            </Box>
-          </Box>
+        <DialogTitle sx={{ color: 'error.main' }}>
+          Confirmar Exclusão de Projeto
         </DialogTitle>
         <DialogContent>
           {selectedProject && (
-            <Box sx={{ mt: 1 }}>
-              <Typography variant="h6" sx={{ mb: 2 }}>
-                {selectedProject.title}
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                {selectedProject.description}
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="body1" sx={{ mb: 3 }}>
+                Tem certeza que deseja excluir o projeto{' '}
+                <strong>{selectedProject.title}</strong>?
               </Typography>
 
-              <Grid container spacing={3}>
-                <Grid item xs={12} md={6}>
-                  <Typography variant="subtitle2" color="text.secondary">
+              <Box
+                sx={{
+                  p: 2,
+                  bgcolor: 'error.lighter',
+                  borderRadius: 1,
+                  border: '1px solid',
+                  borderColor: 'error.light',
+                  mb: 2,
+                }}
+              >
+                <Typography
+                  variant="body2"
+                  color="error.dark"
+                  sx={{ fontWeight: 'medium' }}
+                >
+                  ⚠️ Esta ação não pode ser desfeita!
+                </Typography>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ mt: 1 }}
+                >
+                  Todos os dados relacionados ao projeto serão permanentemente
+                  removidos.
+                </Typography>
+              </Box>
+
+              <Grid container spacing={2}>
+                <Grid item xs={12}>
+                  <Typography variant="caption" color="text.secondary">
                     Status
                   </Typography>
-                  <Chip
-                    label={getStatusLabel(selectedProject.status)}
-                    color={getStatusColor(selectedProject.status)}
-                    sx={{ mt: 1 }}
-                  />
+                  <Box sx={{ mt: 0.5 }}>
+                    <Chip
+                      label={getStatusLabel(selectedProject.status)}
+                      color={getStatusColor(selectedProject.status)}
+                      size="small"
+                    />
+                  </Box>
                 </Grid>
-                <Grid item xs={12} md={6}>
-                  <Typography variant="subtitle2" color="text.secondary">
+                <Grid item xs={12}>
+                  <Typography variant="caption" color="text.secondary">
                     Responsável
                   </Typography>
-                  <Typography variant="body1" sx={{ mt: 1 }}>
-                    {
-                      users.find(
-                        u =>
-                          u.id.toString() === selectedProject.responsibleUserId
-                      )?.full_name
-                    }
+                  <Typography variant="body2" sx={{ mt: 0.5 }}>
+                    {users.find(
+                      u => u.id.toString() === selectedProject.responsibleUserId
+                    )?.full_name || 'Não definido'}
                   </Typography>
                 </Grid>
-                <Grid item xs={12} md={6}>
-                  <Typography variant="subtitle2" color="text.secondary">
-                    Prazo
-                  </Typography>
-                  <Typography variant="body1" sx={{ mt: 1 }}>
-                    {formatDate(selectedProject.end_date)}
-                  </Typography>
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <Typography variant="subtitle2" color="text.secondary">
-                    Orçamento
-                  </Typography>
-                  <Typography variant="body1" sx={{ mt: 1 }}>
-                    {formatCurrency(selectedProject.budget)}
-                  </Typography>
-                </Grid>
-                {selectedProject.tags && selectedProject.tags.length > 0 && (
-                  <Grid item xs={12}>
-                    <Typography
-                      variant="subtitle2"
-                      color="text.secondary"
-                      sx={{ mb: 1 }}
-                    >
-                      Tags
-                    </Typography>
-                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                      {selectedProject.tags.map((tag, index) => (
-                        <Chip
-                          key={index}
-                          label={tag.name}
-                          size="small"
-                          variant="outlined"
-                        />
-                      ))}
-                    </Box>
-                  </Grid>
-                )}
               </Grid>
             </Box>
           )}
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setIsViewDialogOpen(false)}>Fechar</Button>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button
+            onClick={() => setIsDeleteDialogOpen(false)}
+            variant="outlined"
+          >
+            Cancelar
+          </Button>
+          <Button
+            onClick={handleDeleteProject}
+            variant="contained"
+            color="error"
+            disabled={deleteProjectMutation.isPending}
+            startIcon={deleteProjectMutation.isPending ? null : <Delete />}
+          >
+            {deleteProjectMutation.isPending
+              ? 'Excluindo...'
+              : 'Excluir Projeto'}
+          </Button>
         </DialogActions>
       </Dialog>
 

@@ -31,9 +31,13 @@ export interface AgendaEvent {
   projectId?: string;
   locationId?: number;
   taskId?: string;
+  visitId?: string;
+  userId?: string;
   priority: 'low' | 'medium' | 'high' | 'critical';
   isAllDay: boolean;
-  metadata?: Record<string, unknown>;
+  // metadata carrega entidades relacionadas (projeto, locação, tarefa, visita)
+  // em formato dinâmico vindo do backend/JSON.
+  metadata?: Record<string, any>;
 }
 
 export interface AgendaFilters {

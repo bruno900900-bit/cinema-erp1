@@ -32,6 +32,7 @@ const statusIcons: Record<StageStatus, React.ReactNode> = {
   [StageStatus.COMPLETED]: <CheckCircle sx={{ fontSize: 16 }} />,
   [StageStatus.ON_HOLD]: <Pause sx={{ fontSize: 16 }} />,
   [StageStatus.CANCELLED]: <Cancel sx={{ fontSize: 16 }} />,
+  [StageStatus.SKIPPED]: <Cancel sx={{ fontSize: 16 }} />,
 };
 
 const statusColors: Record<StageStatus, string> = {
@@ -40,6 +41,7 @@ const statusColors: Record<StageStatus, string> = {
   [StageStatus.COMPLETED]: '#4caf50',
   [StageStatus.ON_HOLD]: '#ff9800',
   [StageStatus.CANCELLED]: '#f44336',
+  [StageStatus.SKIPPED]: '#bdbdbd',
 };
 
 export default function SimpleStageList({ stages }: SimpleStageListProps) {

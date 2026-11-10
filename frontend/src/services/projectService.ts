@@ -189,7 +189,97 @@ async function fetchProject(id: string): Promise<Project> {
 }
 
 export const projectService = {
-  // Buscar todos os projetos
+  // Buscar projetos baseado no usuário logado (respeitando atribuições)
+  // Admin/Manager: veem todos os projetos
+  // Outros roles: veem apenas projetos atribuídos via user_projects
+  getProjectsForCurrentUser: async (): Promise<Project[]> => {
+    try {
+      // 1. Obter usuário logado
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        console.error('❌ Usuário não autenticado');
+        return [];
+      }
+
+      // 2. Buscar perfil com role e id numérico
+      const { data: profile, error: profileError } = await supabase
+        .from('users')
+        .select('id, role')
+        .eq('auth_id', user.id)
+        .maybeSingle();
+
+      if (profileError || !profile) {
+        console.warn('⚠️ Perfil não encontrado, retornando todos os projetos');
+        // Fallback: retornar todos (caso de admin sem perfil sincronizado)
+        return projectService.getProjects();
+      }
+
+      // 3. Admins e managers veem tudo
+      const fullAccessRoles = ['admin', 'manager'];
+      if (fullAccessRoles.includes(profile.role)) {
+        console.log(
+          `✅ [${profile.role}] Acesso total — carregando todos os projetos`
+        );
+        return projectService.getProjects();
+      }
+
+      // 4. Outros roles: filtrar por user_projects
+      console.log(
+        `🔒 [${profile.role}] Filtrando projetos por atribuição (user_id: ${profile.id})`
+      );
+
+      const { data: assignments, error: assignError } = await supabase
+        .from('user_projects')
+        .select('project_id')
+        .eq('user_id', profile.id);
+
+      if (assignError) {
+        console.error(
+          '❌ Erro ao buscar atribuições de projetos:',
+          assignError
+        );
+        return [];
+      }
+
+      const projectIds = (assignments || []).map((a: any) => a.project_id);
+      console.log(`📋 Projetos atribuídos: ${projectIds.length}`);
+
+      if (projectIds.length === 0) {
+        return [];
+      }
+
+      // 5. Buscar apenas os projetos atribuídos
+      const { data, error } = await supabase
+        .from('projects')
+        .select(
+          `
+          *,
+          project_locations (
+            *,
+            location:locations (*)
+          )
+        `
+        )
+        .in('id', projectIds);
+
+      if (error) throw error;
+
+      const projectsWithLocations = (data || []).map((p: any) => ({
+        ...p,
+        locations: p.project_locations || [],
+      }));
+
+      return projectsWithLocations as Project[];
+    } catch (error: any) {
+      console.error('❌ ProjectService.getProjectsForCurrentUser:', error);
+      return [];
+    }
+  },
+
+  // Buscar todos os projetos (sem filtro — para uso de admins gerenciando atribuições)
   getProjects: async (): Promise<Project[]> => {
     try {
       console.log('📋 ProjectService.getProjects - Iniciando busca (Supabase)');
@@ -377,14 +467,49 @@ export const projectService = {
   },
 
   // Excluir projeto
-  // Excluir projeto com cascata manual
+  // Excluir projeto com cascata manual completa
   deleteProject: async (id: string): Promise<void> => {
     try {
       console.log(
-        `🗑️ ProjectService.deleteProject - Excluindo dependências do projeto ${id}`
+        `🗑️ ProjectService.deleteProject - Excluindo projeto ${id} e todas as dependências`
       );
 
-      // 1. Excluir Tasks
+      // 1. Excluir eventos de agenda vinculados ao projeto
+      const { error: agendaError } = await supabase
+        .from('agenda_events')
+        .delete()
+        .eq('project_id', id);
+      if (agendaError)
+        console.warn('Erro ao excluir eventos de agenda:', agendaError);
+
+      // 2. Excluir demandas de locação vinculadas ao projeto
+      const { error: demandsError } = await supabase
+        .from('location_demands')
+        .delete()
+        .eq('project_id', id);
+      if (demandsError)
+        console.warn('Erro ao excluir demandas de locação:', demandsError);
+
+      // 3. Excluir associações de usuários ao projeto
+      const { error: userProjectsError } = await supabase
+        .from('user_projects')
+        .delete()
+        .eq('project_id', id);
+      if (userProjectsError)
+        console.warn('Erro ao excluir user_projects:', userProjectsError);
+
+      // 4. Excluir locações de visita do projeto
+      const { error: visitLocsError } = await supabase
+        .from('project_visit_locations')
+        .delete()
+        .eq('project_id', id);
+      if (visitLocsError)
+        console.warn(
+          'Erro ao excluir project_visit_locations:',
+          visitLocsError
+        );
+
+      // 5. Excluir Tasks do projeto
       const { error: tasksError } = await supabase
         .from('project_tasks')
         .delete()
@@ -392,7 +517,7 @@ export const projectService = {
       if (tasksError)
         console.warn('Erro ao excluir tarefas do projeto:', tasksError);
 
-      // 2. Excluir Project Locations
+      // 6. Excluir Project Locations
       const { error: locsError } = await supabase
         .from('project_locations')
         .delete()
@@ -400,7 +525,7 @@ export const projectService = {
       if (locsError)
         console.warn('Erro ao excluir locações do projeto:', locsError);
 
-      // 3. Excluir Project Tags
+      // 7. Excluir Project Tags
       const { error: tagsError } = await supabase
         .from('project_tags')
         .delete()
@@ -408,7 +533,7 @@ export const projectService = {
       if (tagsError)
         console.warn('Erro ao excluir tags do projeto:', tagsError);
 
-      // 4. Excluir Visits (se houver link direto com projeto)
+      // 8. Excluir Visits vinculadas ao projeto
       const { error: visitsError } = await supabase
         .from('visits')
         .delete()
@@ -416,15 +541,19 @@ export const projectService = {
       if (visitsError)
         console.warn('Erro ao excluir visitas do projeto:', visitsError);
 
-      // 5. Finalmente excluir o projeto
+      // 9. Finalmente excluir o projeto
       console.log('🗑️ ProjectService.deleteProject - Excluindo projeto');
       const { error } = await supabase.from('projects').delete().eq('id', id);
 
       if (error) throw error;
+
+      console.log(
+        '✅ Projeto e todas as dependências foram excluídos com sucesso'
+      );
     } catch (error: any) {
-      console.error('Erro ao excluir projeto (Supabase):', error);
+      console.error('❌ Erro ao excluir projeto:', error);
       throw new Error(
-        'Não foi possível excluir o projeto. Verifique se existem registros vinculados que impedem a exclusão.'
+        'Não foi possível excluir o projeto. Erro: ' + error.message
       );
     }
   },
@@ -578,6 +707,51 @@ export const projectService = {
       console.error('Erro ao excluir tarefa (Supabase):', error);
       throw new Error('Não foi possível excluir a tarefa');
     }
+  },
+
+  // ===== Aliases usados pelos componentes de workflow =====
+  createProjectTask: async (
+    projectId: string,
+    task: Partial<ProjectTask>
+  ): Promise<ProjectTask> => {
+    return projectService.addTask(projectId, task);
+  },
+
+  updateProjectTask: async (
+    _projectId: string,
+    taskId: string,
+    task: Partial<ProjectTask>
+  ): Promise<ProjectTask> => {
+    const payload: Record<string, unknown> = {
+      title: task.title,
+      description: task.description,
+      status: task.status,
+      priority: task.priority,
+      due_date:
+        task.due_date instanceof Date
+          ? task.due_date.toISOString()
+          : task.due_date,
+      assigned_to_id: task.assigned_to_id,
+      parent_task_id: task.parent_task_id,
+    };
+    Object.keys(payload).forEach(
+      key => payload[key] === undefined && delete payload[key]
+    );
+    const { data, error } = await supabase
+      .from('project_tasks')
+      .update(payload)
+      .eq('id', taskId)
+      .select()
+      .single();
+    if (error) throw error;
+    return data as ProjectTask;
+  },
+
+  deleteProjectTask: async (
+    _projectId: string,
+    taskId: string
+  ): Promise<void> => {
+    return projectService.deleteTask(taskId);
   },
 
   // Buscar tags disponíveis

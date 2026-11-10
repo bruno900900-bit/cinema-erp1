@@ -12,8 +12,25 @@ import {
 } from '../types/user';
 import { withDiagnostic } from '../utils/withDiagnostic';
 
+// Re-exporta tipos para componentes que importam a partir do service
+export type {
+  User,
+  UserList,
+  UserCreate,
+  UserUpdate,
+  UserPasswordChange,
+  UserBulkAction,
+  UserStats,
+} from '../types/user';
+// UserRole é enum (valor), re-exportado como valor
+export { UserRole } from '../types/user';
+
 // Cache de requests em andamento para evitar duplicatas
 const pendingRequests = new Map<string, Promise<any>>();
+
+// Flag global para suprimir eventos de auth durante criação de usuário pelo admin
+// Evita que o onAuthStateChange reaja ao SIGNED_IN disparado pelo signUp()
+export let isAdminCreatingUser = false;
 
 /**
  * Wrapper para requests com deduplication
@@ -63,28 +80,67 @@ export const userService = {
     email: string;
     full_name: string;
     role: UserRole;
+    password: string;
     permissions_json?: Record<string, boolean>;
     phone?: string;
     bio?: string;
   }) =>
     withDiagnostic('userService.createUserAsAdmin', async () => {
-      // Step 1: Create user in Supabase Auth using signUp
-      // Note: We use signUp since admin API requires service_role key (backend only)
-      // The user will need to verify their email or use magic link
-      const tempPassword = crypto.randomUUID(); // Temporary password, user will reset via email
+      // Step 0: Check if email already exists in database
+      const { data: existingUser, error: checkError } = await supabase
+        .from('users')
+        .select('id, email, auth_id')
+        .eq('email', userData.email)
+        .maybeSingle();
 
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: userData.email,
-        password: tempPassword,
-        options: {
-          data: {
-            full_name: userData.full_name,
-            role: userData.role,
+      if (existingUser) {
+        throw new Error(
+          `O email "${userData.email}" já está cadastrado. Por favor, use outro email.`
+        );
+      }
+
+      // ⚠️ FIX: Save admin session BEFORE signUp to avoid being redirected
+      // Supabase's signUp() automatically logs in as the new user, kicking the admin out
+      const { data: currentSessionData } = await supabase.auth.getSession();
+      const adminSession = currentSessionData?.session;
+
+      // 🚩 Ativa flag para suprimir eventos de auth durante a criação
+      isAdminCreatingUser = true;
+      console.log(
+        '🚩 [AdminCreate] Suprimindo eventos de auth durante criação de usuário'
+      );
+
+      let authData: any;
+      let authError: any;
+
+      try {
+        // Step 1: Create user in Supabase Auth using signUp
+        const result = await supabase.auth.signUp({
+          email: userData.email,
+          password: userData.password,
+          options: {
+            data: {
+              full_name: userData.full_name,
+              role: userData.role,
+            },
+            emailRedirectTo: `${window.location.origin}/login`,
           },
-          // This will send a confirmation email to the user
-          emailRedirectTo: `${window.location.origin}/login`,
-        },
-      });
+        });
+        authData = result.data;
+        authError = result.error;
+      } finally {
+        // ✅ Immediately restore admin session before anything else
+        if (adminSession?.access_token && adminSession?.refresh_token) {
+          await supabase.auth.setSession({
+            access_token: adminSession.access_token,
+            refresh_token: adminSession.refresh_token,
+          });
+          console.log('✅ Admin session restored after user creation');
+        }
+        // 🚩 Desativa flag após restaurar sessão do admin
+        isAdminCreatingUser = false;
+        console.log('🚩 [AdminCreate] Flag de supressão desativada');
+      }
 
       if (authError) {
         console.error('Error creating user in Supabase Auth:', authError);
@@ -95,12 +151,14 @@ export const userService = {
         throw new Error('Falha ao criar usuário no Supabase Auth');
       }
 
+      const authUserId = authData.user.id;
+
       // Step 2: Create user record in our users table with auth_id
       const { data, error } = await supabase
         .from('users')
         .insert([
           {
-            auth_id: authData.user.id, // Link to Supabase Auth user
+            auth_id: authUserId,
             email: userData.email,
             full_name: userData.full_name,
             role: userData.role,
@@ -108,7 +166,7 @@ export const userService = {
             phone: userData.phone,
             bio: userData.bio,
             is_active: true,
-            password_hash: 'managed_by_supabase_auth', // Not used directly
+            password_hash: 'managed_by_supabase_auth',
           },
         ])
         .select()
@@ -116,9 +174,12 @@ export const userService = {
 
       if (error) {
         console.error('Error creating user in database:', error);
-        // Note: We can't easily rollback the Auth user from frontend
-        // Consider using backend endpoint for atomic operation
-        throw new Error(`Erro ao criar usuário no banco: ${error.message}`);
+        console.warn(
+          `⚠️ Rollback needed for auth user ${authUserId} - please delete via Supabase dashboard if user is orphaned`
+        );
+        throw new Error(
+          `Usuário criado no Auth mas falhou ao salvar no banco: ${error.message}. Entre em contato com o administrador.`
+        );
       }
 
       console.log('✅ User created successfully in Auth and database:', data);
@@ -197,11 +258,83 @@ export const userService = {
       return data as User;
     }),
 
-  // Delete user
+  // Delete user with cascade cleanup
   deleteUser: (userId: number) =>
     withDiagnostic('userService.deleteUser', async () => {
+      console.log(`🗑️ Deleting user ${userId} and cleaning up dependencies`);
+
+      // 1. Delete user_projects (user-project associations)
+      const { error: userProjectsError } = await supabase
+        .from('user_projects')
+        .delete()
+        .eq('user_id', userId);
+      if (userProjectsError)
+        console.warn('Error deleting user_projects:', userProjectsError);
+
+      // 2. Delete user_notifications
+      const { error: notificationsError } = await supabase
+        .from('user_notifications')
+        .delete()
+        .eq('user_id', userId);
+      if (notificationsError)
+        console.warn('Error deleting user_notifications:', notificationsError);
+
+      // 3. Delete user_settings
+      const { error: settingsError } = await supabase
+        .from('user_settings')
+        .delete()
+        .eq('user_id', userId);
+      if (settingsError)
+        console.warn('Error deleting user_settings:', settingsError);
+
+      // 4. Unassign from location_demands (preserve demands, just remove assignment)
+      const { error: demandsError } = await supabase
+        .from('location_demands')
+        .update({ assigned_user_id: null })
+        .eq('assigned_user_id', userId);
+      if (demandsError)
+        console.warn('Error unassigning location_demands:', demandsError);
+
+      // 5. Unassign from project_tasks (preserve tasks, just remove assignment)
+      const { error: tasksError } = await supabase
+        .from('project_tasks')
+        .update({ assigned_to: null })
+        .eq('assigned_to', userId);
+      if (tasksError)
+        console.warn('Error unassigning project_tasks:', tasksError);
+
+      // 6. Update projects - nullify user references to preserve projects
+      // Use separate updates for each role to avoid complex OR queries
+      await supabase
+        .from('projects')
+        .update({ manager_id: null })
+        .eq('manager_id', userId);
+
+      await supabase
+        .from('projects')
+        .update({ coordinator_id: null })
+        .eq('coordinator_id', userId);
+
+      await supabase
+        .from('projects')
+        .update({ supervisor_id: null })
+        .eq('supervisor_id', userId);
+
+      await supabase
+        .from('projects')
+        .update({ responsible_user_id: null })
+        .eq('responsible_user_id', userId);
+
+      // 7. Finally, delete the user record
+      console.log('🗑️ Deleting user record from database');
       const { error } = await supabase.from('users').delete().eq('id', userId);
-      if (error) throw error;
+
+      if (error) {
+        console.error('❌ Error deleting user:', error);
+        throw error;
+      }
+
+      console.log('✅ User and all dependencies cleaned up successfully');
     }),
 
   // Activate user
@@ -343,15 +476,43 @@ export const userService = {
       return data as User;
     }),
 
+  // ===== Aliases de compatibilidade (componentes legados) =====
+  getUsersList: (): Promise<UserList[]> =>
+    withDiagnostic('userService.getUsersList', async () => {
+      const { data, error } = await supabase.from('users').select('*');
+      if (error) throw error;
+      return (data as UserList[]) || [];
+    }),
+
+  createUserNew: (userData: any): Promise<User> =>
+    userService.createUser(userData as UserCreate),
+
+  updateUserNew: (userId: number, userData: any): Promise<User> =>
+    userService.updateUser(userId, userData as UserUpdate),
+
+  deleteUserNew: (userId: number): Promise<void> =>
+    userService.deleteUser(userId),
+
   // Update user permissions
   updateUserPermissions: (
     userId: number,
     permissions: Record<string, unknown>
   ) =>
     withDiagnostic('userService.updateUserPermissions', async () => {
-      await userService.updateUser(userId, {
-        permissions_json: permissions,
-      } as any);
+      const { data, error } = await supabase
+        .from('users')
+        .update({ permissions_json: permissions })
+        .eq('id', userId)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error updating user permissions:', error);
+        throw error;
+      }
+
+      console.log('✅ User permissions updated successfully');
+      return data as User;
     }),
 };
 

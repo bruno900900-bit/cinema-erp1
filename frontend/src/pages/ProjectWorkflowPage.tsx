@@ -64,7 +64,7 @@ const WorkflowPage: React.FC = () => {
     mutationFn: (task: ProjectTask) =>
       projectService.updateProjectTask(projectId!, task.id, task),
     onSuccess: () => {
-      queryClient.invalidateQueries(['project', projectId]);
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
       setIsTaskDialogOpen(false);
       setSelectedTask(null);
     },
@@ -74,7 +74,7 @@ const WorkflowPage: React.FC = () => {
     mutationFn: (task: Partial<ProjectTask>) =>
       projectService.createProjectTask(projectId!, task),
     onSuccess: () => {
-      queryClient.invalidateQueries(['project', projectId]);
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
       setIsTaskDialogOpen(false);
     },
   });
@@ -83,7 +83,7 @@ const WorkflowPage: React.FC = () => {
     mutationFn: (taskId: string) =>
       projectService.deleteProjectTask(projectId!, taskId),
     onSuccess: () => {
-      queryClient.invalidateQueries(['project', projectId]);
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
     },
   });
 
@@ -359,7 +359,13 @@ const WorkflowPage: React.FC = () => {
             <TextField
               label="Prazo"
               type="date"
-              value={taskForm.due_date?.split('T')[0]}
+              value={
+                typeof taskForm.due_date === 'string'
+                  ? taskForm.due_date.split('T')[0]
+                  : taskForm.due_date instanceof Date
+                    ? taskForm.due_date.toISOString().split('T')[0]
+                    : ''
+              }
               onChange={e =>
                 setTaskForm(prev => ({
                   ...prev,

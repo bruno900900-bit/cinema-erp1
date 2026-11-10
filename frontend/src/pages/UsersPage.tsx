@@ -60,14 +60,11 @@ import {
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  UserCreate,
-  UserUpdate,
   getUserRoleLabel,
   getUserRoleColor,
-  UserStats,
   userService,
 } from '../services/userService';
-import { UserRole, UserList, User } from '../types/user';
+import { UserRole, UserList, User, UserUpdate, UserStats } from '../types/user';
 import UserDetailModal from '../components/Users/UserDetailModal';
 import UserCreateModal from '../components/Users/UserCreateModal';
 import UserRegistrationModal from '../components/Users/UserRegistrationModal';
@@ -137,16 +134,13 @@ export default function UsersPage() {
     severity: 'success' as 'success' | 'error',
   });
 
-  // Form states
-  const [formData, setFormData] = useState<UserCreate>({
+  // Form states - used only for editing users (creation uses UserCreateModal)
+  const [formData, setFormData] = useState<UserUpdate>({
     email: '',
     full_name: '',
-    password: '',
     bio: '',
     phone: '',
     role: UserRole.OPERATOR,
-    timezone: 'America/Sao_Paulo',
-    locale: 'pt-BR',
   });
 
   // Atualizar filters.search quando debouncedSearch mudar
@@ -174,8 +168,8 @@ export default function UsersPage() {
           filters.is_active === 'active'
             ? true
             : filters.is_active === 'inactive'
-            ? false
-            : undefined,
+              ? false
+              : undefined,
       }),
     dataCategory: 'dynamic', // Dados que mudam com frequência
   });
@@ -186,29 +180,7 @@ export default function UsersPage() {
     // useReferenceQuery já aplica staleTime: 10min, gcTime: 30min
   });
 
-  // Mutations
-  const createUserMutation = useMutation({
-    mutationFn: (userData: UserCreate) => userService.createUser(userData),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['users'] });
-      queryClient.invalidateQueries({ queryKey: ['user-stats'] });
-      setIsCreateDialogOpen(false);
-      setSnackbar({
-        open: true,
-        message: 'Usuário criado com sucesso!',
-        severity: 'success',
-      });
-      resetForm();
-    },
-    onError: () => {
-      setSnackbar({
-        open: true,
-        message: 'Erro ao criar usuário',
-        severity: 'error',
-      });
-    },
-  });
-
+  // Note: User creation is handled by UserCreateModal component
   const updateUserMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: UserUpdate }) =>
       userService.updateUser(id, data),
@@ -301,17 +273,10 @@ export default function UsersPage() {
     setFormData({
       email: '',
       full_name: '',
-      password: '',
       bio: '',
       phone: '',
       role: UserRole.OPERATOR,
-      timezone: 'America/Sao_Paulo',
-      locale: 'pt-BR',
     });
-  };
-
-  const handleCreateUser = () => {
-    createUserMutation.mutate(formData);
   };
 
   const handleEditUser = () => {
@@ -324,8 +289,6 @@ export default function UsersPage() {
           bio: formData.bio,
           phone: formData.phone,
           role: formData.role,
-          timezone: formData.timezone,
-          locale: formData.locale,
         },
       });
     }
@@ -351,12 +314,9 @@ export default function UsersPage() {
     setFormData({
       email: user.email,
       full_name: user.full_name,
-      password: '',
       bio: '',
       phone: user.phone || '',
       role: user.role,
-      timezone: 'America/Sao_Paulo',
-      locale: 'pt-BR',
     });
     setIsEditDialogOpen(true);
   };
@@ -849,121 +809,22 @@ export default function UsersPage() {
         )}
       </Menu>
 
-      {/* Create User Dialog */}
-      <Dialog
+      {/* Create User Modal - uses UserCreateModal with password field */}
+      <UserCreateModal
         open={isCreateDialogOpen}
         onClose={() => setIsCreateDialogOpen(false)}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogTitle>Criar Novo Usuário</DialogTitle>
-        <DialogContent>
-          <Grid container spacing={2} sx={{ mt: 1 }}>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                label="Nome Completo"
-                value={formData.full_name}
-                onChange={e =>
-                  setFormData(prev => ({ ...prev, full_name: e.target.value }))
-                }
-                required
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                label="Email"
-                type="email"
-                value={formData.email}
-                onChange={e =>
-                  setFormData(prev => ({ ...prev, email: e.target.value }))
-                }
-                required
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                label="Senha"
-                type="password"
-                value={formData.password}
-                onChange={e =>
-                  setFormData(prev => ({ ...prev, password: e.target.value }))
-                }
-                required
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                label="Telefone"
-                value={formData.phone}
-                onChange={e =>
-                  setFormData(prev => ({ ...prev, phone: e.target.value }))
-                }
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <FormControl fullWidth>
-                <InputLabel>Função</InputLabel>
-                <Select
-                  value={formData.role}
-                  label="Função"
-                  onChange={e =>
-                    setFormData(prev => ({
-                      ...prev,
-                      role: e.target.value as UserRole,
-                    }))
-                  }
-                >
-                  {Object.values(UserRole).map(role => (
-                    <MenuItem key={role} value={role}>
-                      {getUserRoleLabel(role)}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                label="Fuso Horário"
-                value={formData.timezone}
-                onChange={e =>
-                  setFormData(prev => ({ ...prev, timezone: e.target.value }))
-                }
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Biografia"
-                multiline
-                rows={3}
-                value={formData.bio}
-                onChange={e =>
-                  setFormData(prev => ({ ...prev, bio: e.target.value }))
-                }
-              />
-            </Grid>
-          </Grid>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setIsCreateDialogOpen(false)}>Cancelar</Button>
-          <Button
-            onClick={handleCreateUser}
-            variant="contained"
-            disabled={createUserMutation.isPending}
-          >
-            {createUserMutation.isPending ? (
-              <CircularProgress size={20} />
-            ) : (
-              'Criar'
-            )}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        onSuccess={() => {
+          // Remove cache existente para garantir fresh fetch (evita deduplication)
+          queryClient.removeQueries({ queryKey: ['users'] });
+          queryClient.invalidateQueries({ queryKey: ['users'] });
+          queryClient.invalidateQueries({ queryKey: ['user-stats'] });
+          setSnackbar({
+            open: true,
+            message: 'Usuário criado com sucesso!',
+            severity: 'success',
+          });
+        }}
+      />
 
       {/* Edit User Dialog */}
       <Dialog

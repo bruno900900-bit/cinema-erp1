@@ -22,6 +22,7 @@ import {
   Dashboard,
   LocationOn,
   Assignment,
+  AssignmentInd,
   Description,
   Event,
   People,
@@ -31,6 +32,7 @@ import {
   AccountCircle,
   Notifications,
   Search,
+  Security,
 } from '@mui/icons-material';
 import NotificationCenter from '../Common/NotificationCenter';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -64,6 +66,12 @@ const menuItems = [
     permission: 'canManageProjects',
   },
   {
+    text: 'Minhas Demandas',
+    icon: <AssignmentInd />,
+    path: '/my-demands',
+    permission: null, // Available to all authenticated users
+  },
+  {
     text: 'Contratos',
     icon: <Description />,
     path: '/contracts',
@@ -86,6 +94,12 @@ const menuItems = [
     icon: <People />,
     path: '/users',
     permission: 'canManageUsers',
+  },
+  {
+    text: 'Cargos',
+    icon: <Security />,
+    path: '/admin/roles',
+    permission: 'canManageUserRoles',
   },
   {
     text: 'Arquivos',
@@ -122,6 +136,7 @@ export default function Layout({ children }: LayoutProps) {
       '/settings': 'canManageSettings',
       '/files': 'canViewReports',
       '/contracts': 'canManageProjects',
+      '/my-demands': null, // Available to all
     };
 
     return menuItems.filter(item => {

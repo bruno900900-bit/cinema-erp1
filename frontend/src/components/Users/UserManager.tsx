@@ -219,7 +219,7 @@ const UserManager: React.FC<UserManagerProps> = ({
         delete updateData.password;
       }
       updateMutation.mutate({
-        id: editingUser.id,
+        id: Number(editingUser.id),
         data: updateData,
       });
     } else {
@@ -233,7 +233,7 @@ const UserManager: React.FC<UserManagerProps> = ({
         `Tem certeza que deseja deletar o usuário "${user.full_name}"?`
       )
     ) {
-      deleteMutation.mutate(user.id);
+      deleteMutation.mutate(Number(user.id));
     }
   };
 
@@ -244,10 +244,10 @@ const UserManager: React.FC<UserManagerProps> = ({
           `Tem certeza que deseja desativar o usuário "${user.full_name}"?`
         )
       ) {
-        deleteMutation.mutate(user.id);
+        deleteMutation.mutate(Number(user.id));
       }
     } else {
-      activateMutation.mutate(user.id);
+      activateMutation.mutate(Number(user.id));
     }
   };
 
@@ -573,7 +573,7 @@ const UserManager: React.FC<UserManagerProps> = ({
                       <Tooltip title="Editar">
                         <IconButton
                           size="small"
-                          onClick={() => handleOpen(user)}
+                          onClick={() => handleOpen(user as unknown as User)}
                         >
                           <EditIcon />
                         </IconButton>
@@ -581,7 +581,7 @@ const UserManager: React.FC<UserManagerProps> = ({
                       <Tooltip title={user.is_active ? 'Desativar' : 'Ativar'}>
                         <IconButton
                           size="small"
-                          onClick={() => handleActivate(user)}
+                          onClick={() => handleActivate(user as unknown as User)}
                           color={user.is_active ? 'error' : 'success'}
                         >
                           {user.is_active ? <BlockIcon /> : <CheckCircleIcon />}
@@ -591,7 +591,7 @@ const UserManager: React.FC<UserManagerProps> = ({
                         <Tooltip title="Selecionar">
                           <IconButton
                             size="small"
-                            onClick={() => onUserSelect?.(user)}
+                            onClick={() => onUserSelect?.(user as unknown as User)}
                           >
                             <PersonAddIcon />
                           </IconButton>

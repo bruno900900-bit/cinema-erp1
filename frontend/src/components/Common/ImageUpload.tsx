@@ -109,7 +109,7 @@ export default function ImageUpload({
       // Simular seleção de arquivo
       const mockEvent = {
         target: { files: [file] },
-      } as React.ChangeEvent<HTMLInputElement>;
+      } as unknown as React.ChangeEvent<HTMLInputElement>;
       handleFileSelect(mockEvent);
     }
   };

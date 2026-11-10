@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 
 from ..models.location_demand import LocationDemand, DemandPriority, DemandStatus
 from ..models.agenda_event import AgendaEvent, EventType, EventStatus
+from ..models.notification import Notification, NotificationType
+from ..models.user import User
 from ..schemas.location_demand import (
     LocationDemandCreate,
     LocationDemandUpdate,
@@ -38,7 +40,13 @@ class LocationDemandService:
         if db_demand.due_date:
             self._create_or_update_agenda_event(db_demand)
 
+        # Create notification if assigned_user_id is set and different from creator
+        if db_demand.assigned_user_id and db_demand.assigned_user_id != created_by_user_id:
+            self._create_demand_assignment_notification(db_demand, db_demand.assigned_user_id)
+            self.db.commit()
+
         return db_demand
+
 
     def get_demand(self, demand_id: int) -> Optional[LocationDemand]:
         """Get a demand by ID"""
@@ -58,6 +66,8 @@ class LocationDemandService:
                 query = query.filter(LocationDemand.project_id == filters.project_id)
             if filters.project_location_id:
                 query = query.filter(LocationDemand.project_location_id == filters.project_location_id)
+            if filters.visit_location_id:
+                query = query.filter(LocationDemand.visit_location_id == filters.visit_location_id)
             if filters.status:
                 query = query.filter(LocationDemand.status == filters.status)
             if filters.priority:
@@ -110,6 +120,60 @@ class LocationDemandService:
             LocationDemand.due_date.asc().nullslast()
         ).all()
 
+    def get_demands_by_visit_location(self, visit_location_id: int) -> List[LocationDemand]:
+        """Get all demands for a specific visit location"""
+        return self.db.query(LocationDemand).filter(
+            LocationDemand.visit_location_id == visit_location_id
+        ).order_by(
+            LocationDemand.priority.desc(),
+            LocationDemand.due_date.asc().nullslast()
+        ).all()
+
+    def get_demands_by_assigned_user(self, user_id: int) -> List[LocationDemand]:
+        """Get all demands assigned to a specific user"""
+        return self.db.query(LocationDemand).filter(
+            LocationDemand.assigned_user_id == user_id
+        ).order_by(
+            LocationDemand.priority.desc(),
+            LocationDemand.due_date.asc().nullslast()
+        ).all()
+
+    def get_demands_created_by_user(self, user_id: int) -> List[LocationDemand]:
+        """Get all demands created by a specific user"""
+        return self.db.query(LocationDemand).filter(
+            LocationDemand.created_by_user_id == user_id
+        ).order_by(
+            LocationDemand.priority.desc(),
+            LocationDemand.due_date.asc().nullslast()
+        ).all()
+
+    def _create_demand_assignment_notification(
+        self,
+        demand: LocationDemand,
+        assigned_user_id: int,
+        assigner_name: str = "Sistema"
+    ) -> None:
+        """Create a notification when a demand is assigned to a user"""
+        if not assigned_user_id:
+            return
+
+        # Get location name based on type
+        location_name = ""
+        if demand.project_location and demand.project_location.location:
+            location_name = f" ({demand.project_location.location.title})"
+        elif demand.visit_location:
+            location_name = f" ({demand.visit_location.name})"
+
+        notification = Notification(
+            user_id=assigned_user_id,
+            title="Nova Demanda Atribuída",
+            message=f"Você foi atribuído à demanda: {demand.title}{location_name}",
+            type=NotificationType.DEMAND_ASSIGNED,
+            action_url=f"/projects/{demand.project_id}?tab=demands&demandId={demand.id}",
+            action_text="Ver Demanda"
+        )
+        self.db.add(notification)
+
     def update_demand(
         self,
         demand_id: int,
@@ -129,6 +193,15 @@ class LocationDemandService:
             db_demand.status != DemandStatus.COMPLETED
         )
 
+        # Track if assignment changed
+        old_assigned_user_id = db_demand.assigned_user_id
+        new_assigned_user_id = update_data.get('assigned_user_id')
+        assignment_changed = (
+            'assigned_user_id' in update_data and
+            new_assigned_user_id != old_assigned_user_id and
+            new_assigned_user_id is not None
+        )
+
         for field, value in update_data.items():
             setattr(db_demand, field, value)
 
@@ -139,6 +212,10 @@ class LocationDemandService:
         # Update or create agenda event if due_date changed
         if 'due_date' in update_data:
             self._create_or_update_agenda_event(db_demand)
+
+        # Create notification if assignment changed
+        if assignment_changed:
+            self._create_demand_assignment_notification(db_demand, new_assigned_user_id)
 
         self.db.commit()
         self.db.refresh(db_demand)

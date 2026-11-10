@@ -23,6 +23,13 @@ router = APIRouter()
 
 def _enrich_demand_response(demand: LocationDemand) -> dict:
     """Add computed fields and related data to demand response"""
+    # Determine location name based on type
+    location_name = None
+    if demand.project_location and demand.project_location.location:
+        location_name = demand.project_location.location.title
+    elif demand.visit_location:
+        location_name = demand.visit_location.name
+
     response = {
         "id": demand.id,
         "title": demand.title,
@@ -31,6 +38,7 @@ def _enrich_demand_response(demand: LocationDemand) -> dict:
         "status": demand.status,
         "category": demand.category,
         "project_location_id": demand.project_location_id,
+        "visit_location_id": demand.visit_location_id,
         "project_id": demand.project_id,
         "assigned_user_id": demand.assigned_user_id,
         "created_by_user_id": demand.created_by_user_id,
@@ -44,7 +52,7 @@ def _enrich_demand_response(demand: LocationDemand) -> dict:
         "is_overdue": demand.is_overdue,
         "assigned_user_name": demand.assigned_user.name if demand.assigned_user else None,
         "created_by_user_name": demand.created_by_user.name if demand.created_by_user else None,
-        "location_name": demand.project_location.location.title if demand.project_location and demand.project_location.location else None,
+        "location_name": location_name,
     }
     return response
 
@@ -137,6 +145,75 @@ def get_demands_by_project(
     """Buscar todas as demandas de um projeto"""
     service = LocationDemandService(db)
     demands = service.get_demands_by_project(project_id)
+    return [_enrich_demand_response(d) for d in demands]
+
+
+@router.get("/by-visit-location/{visit_location_id}", response_model=List[LocationDemandResponse])
+def get_demands_by_visit_location(
+    visit_location_id: int,
+    db: Session = Depends(get_db)
+    # current_user: User = Depends(get_current_user)
+):
+    """Buscar todas as demandas de uma locação visitada"""
+    service = LocationDemandService(db)
+    demands = service.get_demands_by_visit_location(visit_location_id)
+    return [_enrich_demand_response(d) for d in demands]
+
+
+@router.get("/my-demands", response_model=List[LocationDemandResponse])
+def get_my_demands(
+    user_id: int = Query(..., description="ID do usuário atual"),
+    include_created: bool = Query(False, description="Incluir demandas criadas pelo usuário"),
+    db: Session = Depends(get_db)
+    # current_user: User = Depends(get_current_user)
+):
+    """Buscar demandas atribuídas ao usuário (e opcionalmente criadas por ele)"""
+    service = LocationDemandService(db)
+
+    # Get demands assigned to user
+    assigned_demands = service.get_demands_by_assigned_user(user_id)
+
+    if include_created:
+        # Also get demands created by user
+        created_demands = service.get_demands_created_by_user(user_id)
+        # Merge and deduplicate
+        all_demand_ids = set()
+        all_demands = []
+        for d in assigned_demands + created_demands:
+            if d.id not in all_demand_ids:
+                all_demand_ids.add(d.id)
+                all_demands.append(d)
+        # Sort by priority and due_date
+        all_demands.sort(key=lambda x: (
+            -{'urgent': 4, 'high': 3, 'medium': 2, 'low': 1}.get(x.priority.value if hasattr(x.priority, 'value') else x.priority, 2),
+            x.due_date or datetime.max
+        ))
+        return [_enrich_demand_response(d) for d in all_demands]
+
+    return [_enrich_demand_response(d) for d in assigned_demands]
+
+
+@router.get("/by-assigned-user/{user_id}", response_model=List[LocationDemandResponse])
+def get_demands_by_assigned_user(
+    user_id: int,
+    db: Session = Depends(get_db)
+    # current_user: User = Depends(get_current_user)
+):
+    """Buscar todas as demandas atribuídas a um usuário específico"""
+    service = LocationDemandService(db)
+    demands = service.get_demands_by_assigned_user(user_id)
+    return [_enrich_demand_response(d) for d in demands]
+
+
+@router.get("/by-creator/{user_id}", response_model=List[LocationDemandResponse])
+def get_demands_by_creator(
+    user_id: int,
+    db: Session = Depends(get_db)
+    # current_user: User = Depends(get_current_user)
+):
+    """Buscar todas as demandas criadas por um usuário específico"""
+    service = LocationDemandService(db)
+    demands = service.get_demands_created_by_user(user_id)
     return [_enrich_demand_response(d) for d in demands]
 
 

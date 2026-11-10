@@ -116,6 +116,10 @@ class ProjectService:
         if not project:
             return False
 
+        # Unlink locations (set project_id to None) to preserve them
+        from ..models.location import Location
+        self.db.query(Location).filter(Location.project_id == project_id).update({Location.project_id: None})
+
         self.db.delete(project)
         self.db.commit()
         return True

@@ -104,6 +104,7 @@ const getStatusLabel = (status: StageStatus): string => {
     [StageStatus.COMPLETED]: 'Concluída',
     [StageStatus.CANCELLED]: 'Cancelada',
     [StageStatus.ON_HOLD]: 'Em Espera',
+    [StageStatus.SKIPPED]: 'Pulada',
   };
   return labels[status] || status;
 };

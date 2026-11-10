@@ -125,7 +125,9 @@ export default function LoginPage() {
           password: values.password,
           full_name: values.full_name,
         });
-        setSuccess('Conta criada com sucesso! Você já pode fazer login.');
+        setSuccess(
+          '✅ Conta criada com sucesso! Aguarde aprovação do administrador. Você receberá um email quando sua conta for ativada.'
+        );
         setTabValue(0);
         registerFormik.resetForm();
       } catch (err: any) {

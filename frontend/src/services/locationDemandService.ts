@@ -1,4 +1,14 @@
-import { apiService } from './api';
+/**
+ * Location Demand Service - Supabase Integration
+ * Migrated from deprecated Cloud Run API to direct Supabase client
+ */
+
+import { supabase } from '../config/supabaseClient';
+import {
+  agendaEventService,
+  EventType,
+  EventStatus,
+} from './agendaEventService';
 
 // ===== Types =====
 
@@ -12,7 +22,8 @@ export type DemandStatus =
 
 export interface LocationDemand {
   id: number;
-  project_location_id: number;
+  project_location_id: number | null;
+  visit_location_id: number | null;
   project_id: number;
   title: string;
   description?: string;
@@ -28,14 +39,19 @@ export interface LocationDemand {
   attachments_json?: string[];
   created_at: string;
   updated_at: string;
+  // Joined fields from view
   is_overdue?: boolean;
   assigned_user_name?: string;
+  assigned_user_email?: string;
   created_by_user_name?: string;
+  created_by_user_email?: string;
   location_name?: string;
+  project_name?: string;
 }
 
 export interface LocationDemandCreate {
-  project_location_id: number;
+  project_location_id?: number;
+  visit_location_id?: number;
   project_id: number;
   title: string;
   description?: string;
@@ -43,6 +59,7 @@ export interface LocationDemandCreate {
   status?: DemandStatus;
   category?: string;
   assigned_user_id?: number;
+  created_by_user_id?: number;
   due_date?: string;
   notes?: string;
   attachments_json?: string[];
@@ -63,9 +80,11 @@ export interface LocationDemandUpdate {
 export interface LocationDemandFilter {
   project_id?: number;
   project_location_id?: number;
+  visit_location_id?: number;
   status?: DemandStatus;
   priority?: DemandPriority;
   assigned_user_id?: number;
+  created_by_user_id?: number;
   category?: string;
   overdue_only?: boolean;
   due_date_from?: string;
@@ -129,20 +148,113 @@ export const statusColors: Record<DemandStatus, string> = {
 // ===== Service =====
 
 class LocationDemandService {
-  private baseUrl = '/location-demands';
+  private tableName = 'location_demands';
+  private viewName = 'location_demands_with_users';
+
+  /**
+   * Sync demand to agenda - create/update/delete events as needed
+   */
+  private async syncDemandToAgenda(demand: LocationDemand): Promise<void> {
+    try {
+      if (!demand.due_date) {
+        // No due date - delete event if exists
+        if (demand.agenda_event_id) {
+          try {
+            await agendaEventService.deleteEvent(demand.agenda_event_id);
+            // Clear the reference
+            await supabase
+              .from(this.tableName)
+              .update({ agenda_event_id: null })
+              .eq('id', demand.id);
+          } catch (error) {
+            console.warn('Failed to delete agenda event:', error);
+          }
+        }
+        return;
+      }
+
+      const eventData = {
+        title: `📋 ${demand.title}`,
+        description: demand.description || 'Vencimento de demanda',
+        start_date: new Date(demand.due_date).toISOString().split('T')[0],
+        all_day: true,
+        event_type: EventType.DEMAND_DUE,
+        status:
+          demand.status === 'completed'
+            ? EventStatus.COMPLETED
+            : EventStatus.SCHEDULED,
+        project_id: demand.project_id,
+        priority:
+          demand.priority === 'urgent'
+            ? 5
+            : demand.priority === 'high'
+              ? 4
+              : demand.priority === 'medium'
+                ? 3
+                : 2,
+        color: demand.is_overdue ? '#f44336' : '#2196f3',
+        metadata_json: {
+          demand_id: demand.id,
+          demand_category: demand.category,
+          demand_priority: demand.priority,
+        },
+      };
+
+      if (demand.agenda_event_id) {
+        // Update existing event
+        await agendaEventService.updateEvent(demand.agenda_event_id, eventData);
+      } else {
+        // Create new event
+        const event = await agendaEventService.createEvent(eventData);
+        // Update demand with event ID
+        await supabase
+          .from(this.tableName)
+          .update({ agenda_event_id: event.id })
+          .eq('id', demand.id);
+      }
+    } catch (error) {
+      console.error('Failed to sync demand to agenda:', error);
+      // Don't fail the demand operation if agenda sync fails
+    }
+  }
 
   /**
    * Create a new demand
    */
   async createDemand(data: LocationDemandCreate): Promise<LocationDemand> {
-    return apiService.post<LocationDemand>(this.baseUrl, data);
+    const { data: result, error } = await supabase
+      .from(this.tableName)
+      .insert(data)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error creating demand:', error);
+      throw new Error(`Erro ao criar demanda: ${error.message}`);
+    }
+
+    // Sync to agenda after creation
+    await this.syncDemandToAgenda(result as LocationDemand);
+
+    return result as LocationDemand;
   }
 
   /**
    * Get a single demand by ID
    */
   async getDemand(demandId: number): Promise<LocationDemand> {
-    return apiService.get<LocationDemand>(`${this.baseUrl}/${demandId}`);
+    const { data, error } = await supabase
+      .from(this.viewName)
+      .select('*')
+      .eq('id', demandId)
+      .single();
+
+    if (error) {
+      console.error('Error fetching demand:', error);
+      throw new Error(`Erro ao buscar demanda: ${error.message}`);
+    }
+
+    return data as LocationDemand;
   }
 
   /**
@@ -153,43 +265,87 @@ class LocationDemandService {
     page: number = 1,
     pageSize: number = 50
   ): Promise<LocationDemandListResponse> {
-    const skip = (page - 1) * pageSize;
-    const params = new URLSearchParams();
-    params.append('skip', skip.toString());
-    params.append('limit', pageSize.toString());
+    const offset = (page - 1) * pageSize;
 
+    let query = supabase.from(this.viewName).select('*', { count: 'exact' });
+
+    // Apply filters
     if (filters) {
-      if (filters.project_id)
-        params.append('project_id', filters.project_id.toString());
-      if (filters.project_location_id)
-        params.append(
-          'project_location_id',
-          filters.project_location_id.toString()
-        );
-      if (filters.status) params.append('status', filters.status);
-      if (filters.priority) params.append('priority', filters.priority);
-      if (filters.assigned_user_id)
-        params.append('assigned_user_id', filters.assigned_user_id.toString());
-      if (filters.category) params.append('category', filters.category);
-      if (filters.overdue_only) params.append('overdue_only', 'true');
-      if (filters.due_date_from)
-        params.append('due_date_from', filters.due_date_from);
-      if (filters.due_date_to)
-        params.append('due_date_to', filters.due_date_to);
+      if (filters.project_id) {
+        query = query.eq('project_id', filters.project_id);
+      }
+      if (filters.project_location_id) {
+        query = query.eq('project_location_id', filters.project_location_id);
+      }
+      if (filters.visit_location_id) {
+        query = query.eq('visit_location_id', filters.visit_location_id);
+      }
+      if (filters.status) {
+        query = query.eq('status', filters.status);
+      }
+      if (filters.priority) {
+        query = query.eq('priority', filters.priority);
+      }
+      if (filters.assigned_user_id) {
+        query = query.eq('assigned_user_id', filters.assigned_user_id);
+      }
+      if (filters.created_by_user_id) {
+        query = query.eq('created_by_user_id', filters.created_by_user_id);
+      }
+      if (filters.category) {
+        query = query.eq('category', filters.category);
+      }
+      if (filters.overdue_only) {
+        query = query.eq('is_overdue', true);
+      }
+      if (filters.due_date_from) {
+        query = query.gte('due_date', filters.due_date_from);
+      }
+      if (filters.due_date_to) {
+        query = query.lte('due_date', filters.due_date_to);
+      }
     }
 
-    return apiService.get<LocationDemandListResponse>(
-      `${this.baseUrl}?${params.toString()}`
-    );
+    // Apply pagination and ordering
+    query = query
+      .order('created_at', { ascending: false })
+      .range(offset, offset + pageSize - 1);
+
+    const { data, error, count } = await query;
+
+    if (error) {
+      console.error('Error fetching demands:', error);
+      throw new Error(`Erro ao buscar demandas: ${error.message}`);
+    }
+
+    const total = count || 0;
+    const totalPages = Math.ceil(total / pageSize);
+
+    return {
+      demands: (data || []) as LocationDemand[],
+      total,
+      page,
+      size: pageSize,
+      total_pages: totalPages,
+    };
   }
 
   /**
    * Get all demands for a project
    */
   async getDemandsByProject(projectId: number): Promise<LocationDemand[]> {
-    return apiService.get<LocationDemand[]>(
-      `${this.baseUrl}/by-project/${projectId}`
-    );
+    const { data, error } = await supabase
+      .from(this.viewName)
+      .select('*')
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching project demands:', error);
+      throw new Error(`Erro ao buscar demandas do projeto: ${error.message}`);
+    }
+
+    return (data || []) as LocationDemand[];
   }
 
   /**
@@ -198,9 +354,40 @@ class LocationDemandService {
   async getDemandsByLocation(
     projectLocationId: number
   ): Promise<LocationDemand[]> {
-    return apiService.get<LocationDemand[]>(
-      `${this.baseUrl}/by-location/${projectLocationId}`
-    );
+    const { data, error } = await supabase
+      .from(this.viewName)
+      .select('*')
+      .eq('project_location_id', projectLocationId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching location demands:', error);
+      throw new Error(`Erro ao buscar demandas da locação: ${error.message}`);
+    }
+
+    return (data || []) as LocationDemand[];
+  }
+
+  /**
+   * Get all demands for a specific visit location
+   */
+  async getDemandsByVisitLocation(
+    visitLocationId: number
+  ): Promise<LocationDemand[]> {
+    const { data, error } = await supabase
+      .from(this.viewName)
+      .select('*')
+      .eq('visit_location_id', visitLocationId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching visit location demands:', error);
+      throw new Error(
+        `Erro ao buscar demandas da locação visitada: ${error.message}`
+      );
+    }
+
+    return (data || []) as LocationDemand[];
   }
 
   /**
@@ -210,13 +397,41 @@ class LocationDemandService {
     projectId?: number,
     projectLocationId?: number
   ): Promise<LocationDemandSummary> {
-    const params = new URLSearchParams();
-    if (projectId) params.append('project_id', projectId.toString());
-    if (projectLocationId)
-      params.append('project_location_id', projectLocationId.toString());
-    return apiService.get<LocationDemandSummary>(
-      `${this.baseUrl}/summary?${params.toString()}`
-    );
+    let query = supabase
+      .from(this.viewName)
+      .select('status, priority, is_overdue');
+
+    if (projectId) {
+      query = query.eq('project_id', projectId);
+    }
+    if (projectLocationId) {
+      query = query.eq('project_location_id', projectLocationId);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('Error fetching demand summary:', error);
+      throw new Error(`Erro ao buscar resumo de demandas: ${error.message}`);
+    }
+
+    const demands = data || [];
+
+    const summary: LocationDemandSummary = {
+      total: demands.length,
+      pending: demands.filter(d => d.status === 'pending').length,
+      in_progress: demands.filter(d => d.status === 'in_progress').length,
+      completed: demands.filter(d => d.status === 'completed').length,
+      overdue: demands.filter(d => d.is_overdue).length,
+      by_priority: {
+        low: demands.filter(d => d.priority === 'low').length,
+        medium: demands.filter(d => d.priority === 'medium').length,
+        high: demands.filter(d => d.priority === 'high').length,
+        urgent: demands.filter(d => d.priority === 'urgent').length,
+      },
+    };
+
+    return summary;
   }
 
   /**
@@ -226,7 +441,22 @@ class LocationDemandService {
     demandId: number,
     data: LocationDemandUpdate
   ): Promise<LocationDemand> {
-    return apiService.put<LocationDemand>(`${this.baseUrl}/${demandId}`, data);
+    const { data: result, error } = await supabase
+      .from(this.tableName)
+      .update(data)
+      .eq('id', demandId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating demand:', error);
+      throw new Error(`Erro ao atualizar demanda: ${error.message}`);
+    }
+
+    // Sync to agenda after update
+    await this.syncDemandToAgenda(result as LocationDemand);
+
+    return result as LocationDemand;
   }
 
   /**
@@ -236,26 +466,66 @@ class LocationDemandService {
     demandId: number,
     status: DemandStatus
   ): Promise<{ message: string; demand_id: number }> {
-    return apiService.patch<{ message: string; demand_id: number }>(
-      `${this.baseUrl}/${demandId}/status?status=${status}`,
-      {}
-    );
+    const updateData: LocationDemandUpdate = { status };
+
+    if (status === 'completed') {
+      (updateData as any).completed_at = new Date().toISOString();
+    }
+
+    const { error } = await supabase
+      .from(this.tableName)
+      .update(updateData)
+      .eq('id', demandId);
+
+    if (error) {
+      console.error('Error updating demand status:', error);
+      throw new Error(`Erro ao atualizar status: ${error.message}`);
+    }
+
+    return { message: 'Status atualizado com sucesso', demand_id: demandId };
   }
 
   /**
    * Delete a demand
    */
   async deleteDemand(demandId: number): Promise<{ message: string }> {
-    return apiService.delete<{ message: string }>(
-      `${this.baseUrl}/${demandId}`
-    );
+    // Get demand to find agenda_event_id before deletion
+    const { data: demand } = await supabase
+      .from(this.tableName)
+      .select('agenda_event_id')
+      .eq('id', demandId)
+      .single();
+
+    // Delete demand
+    const { error } = await supabase
+      .from(this.tableName)
+      .delete()
+      .eq('id', demandId);
+
+    if (error) {
+      console.error('Error deleting demand:', error);
+      throw new Error(`Erro ao deletar demanda: ${error.message}`);
+    }
+
+    // Delete associated agenda event if exists
+    if (demand?.agenda_event_id) {
+      try {
+        await agendaEventService.deleteEvent(demand.agenda_event_id);
+      } catch (error) {
+        console.warn('Failed to delete associated agenda event:', error);
+      }
+    }
+
+    return { message: 'Demanda deletada com sucesso' };
   }
 
   /**
    * Mark demand as completed
    */
   async completeDemand(demandId: number): Promise<LocationDemand> {
-    return this.updateDemand(demandId, { status: 'completed' });
+    return this.updateDemand(demandId, {
+      status: 'completed',
+    });
   }
 
   /**
@@ -263,6 +533,73 @@ class LocationDemandService {
    */
   async startDemand(demandId: number): Promise<LocationDemand> {
     return this.updateDemand(demandId, { status: 'in_progress' });
+  }
+
+  /**
+   * Get demands assigned to current user (and optionally created by user)
+   */
+  async getMyDemands(
+    userId: number,
+    includeCreated: boolean = false
+  ): Promise<LocationDemand[]> {
+    let query = supabase.from(this.viewName).select('*');
+
+    if (includeCreated) {
+      // Get demands assigned to user OR created by user
+      query = query.or(
+        `assigned_user_id.eq.${userId},created_by_user_id.eq.${userId}`
+      );
+    } else {
+      // Get only demands assigned to user
+      query = query.eq('assigned_user_id', userId);
+    }
+
+    query = query.order('created_at', { ascending: false });
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('Error fetching my demands:', error);
+      throw new Error(`Erro ao buscar suas demandas: ${error.message}`);
+    }
+
+    return (data || []) as LocationDemand[];
+  }
+
+  /**
+   * Get all demands assigned to a specific user
+   */
+  async getDemandsByAssignedUser(userId: number): Promise<LocationDemand[]> {
+    const { data, error } = await supabase
+      .from(this.viewName)
+      .select('*')
+      .eq('assigned_user_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching assigned demands:', error);
+      throw new Error(`Erro ao buscar demandas atribuídas: ${error.message}`);
+    }
+
+    return (data || []) as LocationDemand[];
+  }
+
+  /**
+   * Get all demands created by a specific user
+   */
+  async getDemandsByCreator(userId: number): Promise<LocationDemand[]> {
+    const { data, error } = await supabase
+      .from(this.viewName)
+      .select('*')
+      .eq('created_by_user_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching created demands:', error);
+      throw new Error(`Erro ao buscar demandas criadas: ${error.message}`);
+    }
+
+    return (data || []) as LocationDemand[];
   }
 }
 

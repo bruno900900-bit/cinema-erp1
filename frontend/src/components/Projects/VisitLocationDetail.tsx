@@ -57,6 +57,7 @@ import projectVisitLocationService, {
   WorkflowStage,
 } from '../../services/projectVisitLocationService';
 import { userService } from '../../services/userService';
+import VisitLocationDemands from './VisitLocationDemands';
 
 interface VisitLocationDetailProps {
   locationId: number;
@@ -512,259 +513,21 @@ const VisitLocationDetail: React.FC<VisitLocationDetailProps> = ({
             </Paper>
           </Grid>
 
-          {/* Right Column - Tarefas */}
+          {/* Right Column - Demandas/Tarefas */}
           <Grid item xs={12} md={5}>
             <Paper
               elevation={0}
               sx={{
-                p: 2,
+                p: 3,
                 borderRadius: 3,
                 border: '1px solid #334155',
                 background: 'linear-gradient(180deg, #1e293b 0%, #0f172a 100%)',
               }}
             >
-              <Box
-                sx={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  mb: 2,
-                }}
-              >
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <WorkflowIcon sx={{ color: '#8b5cf6', fontSize: 20 }} />
-                  <Typography
-                    variant="subtitle1"
-                    sx={{ fontWeight: 600, color: '#e2e8f0' }}
-                  >
-                    Tarefas
-                  </Typography>
-                </Box>
-                <Button
-                  size="small"
-                  startIcon={<AddIcon />}
-                  onClick={() => setAddStageOpen(true)}
-                  sx={{
-                    color: '#8b5cf6',
-                    borderColor: '#8b5cf6',
-                    '&:hover': { bgcolor: 'rgba(139,92,246,0.1)' },
-                  }}
-                  variant="outlined"
-                >
-                  Nova
-                </Button>
-              </Box>
-
-              {/* Task List - uses safeStages as tasks */}
-              <Box
-                sx={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 1,
-                  maxHeight: 300,
-                  overflow: 'auto',
-                }}
-              >
-                {safeStages.length > 0 ? (
-                  [...safeStages]
-                    .sort(
-                      (a: any, b: any) =>
-                        (a.order_index || 0) - (b.order_index || 0)
-                    )
-                    .map((stage: WorkflowStage, index: number) => {
-                      // Priority based on status or notes keywords
-                      const getPriority = () => {
-                        const notes = (stage.notes || '').toLowerCase();
-                        if (
-                          notes.includes('urgente') ||
-                          notes.includes('urgent')
-                        )
-                          return 'URGENTE';
-                        if (notes.includes('alta') || notes.includes('high'))
-                          return 'ALTA';
-                        if (notes.includes('média') || notes.includes('medium'))
-                          return 'MÉDIA';
-                        if (stage.status === 'in_progress') return 'ALTA';
-                        return 'BAIXA';
-                      };
-
-                      const priority = getPriority();
-                      const priorityColors: {
-                        [key: string]: {
-                          bg: string;
-                          border: string;
-                          text: string;
-                        };
-                      } = {
-                        URGENTE: {
-                          bg: '#fef2f2',
-                          border: '#ef4444',
-                          text: '#dc2626',
-                        },
-                        ALTA: {
-                          bg: '#fff7ed',
-                          border: '#f97316',
-                          text: '#ea580c',
-                        },
-                        MÉDIA: {
-                          bg: '#fefce8',
-                          border: '#eab308',
-                          text: '#ca8a04',
-                        },
-                        BAIXA: {
-                          bg: '#f0fdf4',
-                          border: '#22c55e',
-                          text: '#16a34a',
-                        },
-                      };
-                      const colors = priorityColors[priority];
-
-                      return (
-                        <Box
-                          key={stage.id || index}
-                          onClick={() => {
-                            setSelectedStage(stage);
-                            setStageNote(stage.notes || '');
-                            setStageDetailOpen(true);
-                          }}
-                          sx={{
-                            p: 1.5,
-                            borderRadius: 2,
-                            bgcolor: '#0f172a',
-                            borderLeft: `4px solid ${colors.border}`,
-                            cursor: 'pointer',
-                            transition: 'all 0.2s',
-                            '&:hover': {
-                              bgcolor: '#1e293b',
-                              transform: 'translateX(4px)',
-                            },
-                          }}
-                        >
-                          <Box
-                            sx={{
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              alignItems: 'flex-start',
-                            }}
-                          >
-                            <Box sx={{ flex: 1 }}>
-                              <Box
-                                sx={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: 1,
-                                  mb: 0.5,
-                                }}
-                              >
-                                <Chip
-                                  label={priority}
-                                  size="small"
-                                  sx={{
-                                    height: 18,
-                                    fontSize: 9,
-                                    fontWeight: 700,
-                                    bgcolor: colors.bg,
-                                    color: colors.text,
-                                    border: `1px solid ${colors.border}`,
-                                  }}
-                                />
-                                <Chip
-                                  label={
-                                    stage.status === 'completed'
-                                      ? '✅'
-                                      : stage.status === 'in_progress'
-                                      ? '🔄'
-                                      : '⏳'
-                                  }
-                                  size="small"
-                                  sx={{
-                                    height: 18,
-                                    fontSize: 10,
-                                    bgcolor: 'transparent',
-                                  }}
-                                />
-                              </Box>
-                              <Typography
-                                variant="body2"
-                                sx={{ color: '#e2e8f0', fontWeight: 500 }}
-                              >
-                                {stage.title}
-                              </Typography>
-                              {stage.notes && (
-                                <Typography
-                                  variant="caption"
-                                  sx={{
-                                    color: '#94a3b8',
-                                    display: 'block',
-                                    mt: 0.5,
-                                  }}
-                                >
-                                  {stage.notes.substring(0, 60)}
-                                  {stage.notes.length > 60 ? '...' : ''}
-                                </Typography>
-                              )}
-                              {stage.responsible_user && (
-                                <Box
-                                  sx={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 0.5,
-                                    mt: 0.5,
-                                  }}
-                                >
-                                  <Avatar
-                                    sx={{ width: 16, height: 16, fontSize: 8 }}
-                                  >
-                                    {(
-                                      stage.responsible_user as any
-                                    )?.full_name?.charAt(0) || '?'}
-                                  </Avatar>
-                                  <Typography
-                                    variant="caption"
-                                    sx={{ color: '#64748b', fontSize: 10 }}
-                                  >
-                                    {(stage.responsible_user as any)
-                                      ?.full_name || 'Usuário'}
-                                  </Typography>
-                                </Box>
-                              )}
-                            </Box>
-                            {/* Delete Button */}
-                            <IconButton
-                              size="small"
-                              onClick={e => {
-                                e.stopPropagation();
-                                if (window.confirm('Excluir esta tarefa?')) {
-                                  deleteStageMutation.mutate(stage.id);
-                                }
-                              }}
-                              sx={{
-                                color: '#ef4444',
-                                p: 0.5,
-                                opacity: 0.6,
-                                '&:hover': {
-                                  opacity: 1,
-                                  bgcolor: 'rgba(239,68,68,0.1)',
-                                },
-                              }}
-                            >
-                              <DeleteIcon sx={{ fontSize: 16 }} />
-                            </IconButton>
-                          </Box>
-                        </Box>
-                      );
-                    })
-                ) : (
-                  <Box sx={{ textAlign: 'center', py: 3 }}>
-                    <Typography variant="body2" sx={{ color: '#64748b' }}>
-                      Nenhuma tarefa adicionada
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: '#475569' }}>
-                      Clique em "Nova" para adicionar
-                    </Typography>
-                  </Box>
-                )}
-              </Box>
+              <VisitLocationDemands
+                visitLocationId={locationId}
+                projectId={location.project_id}
+              />
             </Paper>
           </Grid>
         </Grid>
@@ -909,7 +672,11 @@ const VisitLocationDetail: React.FC<VisitLocationDetailProps> = ({
                                   </Avatar>
                                   <Typography
                                     variant="subtitle2"
-                                    sx={{ fontWeight: 600, flexGrow: 1 }}
+                                    sx={{
+                                      fontWeight: 600,
+                                      flexGrow: 1,
+                                      color: '#000',
+                                    }}
                                   >
                                     {comment.user?.full_name || 'Usuário'}
                                   </Typography>
@@ -940,7 +707,7 @@ const VisitLocationDetail: React.FC<VisitLocationDetailProps> = ({
                                 </Box>
                                 <Typography
                                   variant="body2"
-                                  sx={{ color: '#475569' }}
+                                  sx={{ color: '#000' }}
                                 >
                                   {comment.comment}
                                 </Typography>
@@ -989,6 +756,9 @@ const VisitLocationDetail: React.FC<VisitLocationDetailProps> = ({
                           bgcolor: '#fff',
                           '& .MuiOutlinedInput-root': {
                             borderRadius: 2,
+                          },
+                          '& .MuiInputBase-input': {
+                            color: '#000', // Texto preto
                           },
                         }}
                       />
@@ -1202,8 +972,8 @@ const VisitLocationDetail: React.FC<VisitLocationDetailProps> = ({
                       selectedStage.status === 'completed'
                         ? '#10b981'
                         : selectedStage.status === 'in_progress'
-                        ? '#f59e0b'
-                        : '#64748b',
+                          ? '#f59e0b'
+                          : '#64748b',
                     color: '#fff',
                     fontWeight: 'bold',
                   }}
@@ -1216,8 +986,8 @@ const VisitLocationDetail: React.FC<VisitLocationDetailProps> = ({
                     {selectedStage.status === 'completed'
                       ? '✅ Concluída'
                       : selectedStage.status === 'in_progress'
-                      ? '🔄 Em Andamento'
-                      : '⏳ Pendente'}
+                        ? '🔄 Em Andamento'
+                        : '⏳ Pendente'}
                   </Typography>
                 </Box>
               </Box>

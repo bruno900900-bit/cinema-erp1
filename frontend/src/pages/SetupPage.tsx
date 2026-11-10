@@ -51,7 +51,7 @@ const SetupPage: React.FC = () => {
     try {
       setLoading(true);
       const status = await setupService.getSetupStatus();
-      setSetupStatus(status as SetupStatus);
+      setSetupStatus(status as unknown as SetupStatus);
     } catch (error) {
       console.error('Erro ao verificar status do setup:', error);
       setError('Erro ao verificar status do sistema');

@@ -53,6 +53,7 @@ import {
   Delete as DeleteIcon,
   Share as ShareIcon,
   CloudUpload as CloudUploadIcon,
+  Description,
 } from '@mui/icons-material';
 import { useQuery } from '@tanstack/react-query';
 import { projectService } from '../services/projectService';
@@ -78,10 +79,10 @@ const FilesPage: React.FC = () => {
   const [filterType, setFilterType] = useState<string>('all');
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
 
-  // Buscar projetos
+  // Buscar apenas projetos do usuário logado (filtrado por atribuições)
   const { data: projectsResponse, isLoading: projectsLoading } = useQuery({
     queryKey: ['projects'],
-    queryFn: projectService.getProjects,
+    queryFn: projectService.getProjectsForCurrentUser,
   });
 
   // Buscar usuários
@@ -97,7 +98,7 @@ const FilesPage: React.FC = () => {
     enabled: !!projectsResponse && !!usersResponse,
   });
 
-  const projects = projectsResponse?.projects || [];
+  const projects = projectsResponse || [];
   const users = usersResponse?.users || [];
 
   // Inicializar dados de exemplo quando os dados estiverem disponíveis

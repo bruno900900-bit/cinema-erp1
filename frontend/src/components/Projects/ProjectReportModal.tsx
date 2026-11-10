@@ -135,15 +135,15 @@ export default function ProjectReportModal({
       // Build report data structure
       const reportData: ReportData = {
         projeto: {
-          id: project.id,
-          nome: project.name || project.title || '',
+          id: Number(project.id),
+          nome: project.title || '',
           descricao: project.description || '',
           cliente: project.client_name || '',
           cliente_email: project.client_email || '',
           cliente_telefone: project.client_phone || '',
           status: project.status || '',
-          data_inicio: project.start_date || '',
-          data_fim: project.end_date || '',
+          data_inicio: project.start_date ? String(project.start_date) : '',
+          data_fim: project.end_date ? String(project.end_date) : '',
           orcamento_total: project.budget || 0,
           orcamento_gasto: project.budget_spent || 0,
           orcamento_restante:

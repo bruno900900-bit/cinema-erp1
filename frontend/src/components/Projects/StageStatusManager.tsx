@@ -61,6 +61,11 @@ const statusConfig: Record<
     icon: <Cancel />,
     color: '#f44336',
   },
+  [StageStatus.SKIPPED]: {
+    label: 'Pulada',
+    icon: <Cancel />,
+    color: '#bdbdbd',
+  },
 };
 
 export function StageStatusManager({

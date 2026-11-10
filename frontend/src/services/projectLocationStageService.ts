@@ -289,6 +289,47 @@ class ProjectLocationStageService {
       .eq('id', id);
     if (error) throw new Error(error.message);
   }
+
+  /**
+   * Busca etapas com filtros (alias usado pelo calendário)
+   */
+  async getStages(filter: {
+    project_id: number;
+    date_from?: string;
+    date_to?: string;
+  }): Promise<ProjectLocationStage[]> {
+    return this.getStagesByProject(filter.project_id);
+  }
+
+  /**
+   * Cria etapas padrão para uma locação (alias compatível)
+   */
+  async createDefaultStagesForLocation(
+    projectLocationId: number,
+    _locationId?: number
+  ): Promise<ProjectLocationStage[]> {
+    return this.createDefaultStages(projectLocationId);
+  }
+
+  /**
+   * Retorna o rótulo legível de um tipo de etapa
+   */
+  getStageTypeLabel(type: string): string {
+    const labels: Record<string, string> = {
+      prospeccao: 'Prospecção',
+      visitacao: 'Visitação',
+      avaliacao_tecnica: 'Avaliação Técnica',
+      aprovacao_cliente: 'Aprovação do Cliente',
+      negociacao: 'Negociação',
+      contratacao: 'Contratação',
+      preparacao: 'Preparação',
+      setup: 'Setup',
+      gravacao: 'Gravação',
+      desmontagem: 'Desmontagem',
+      entrega: 'Entrega',
+    };
+    return labels[type] || type;
+  }
 }
 
 export const projectLocationStageService = new ProjectLocationStageService();

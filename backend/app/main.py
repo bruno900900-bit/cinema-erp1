@@ -10,6 +10,7 @@ from .api.v1.endpoints import visits_router, projects_router, locations_router, 
 from .api.v1.endpoints import presentations as presentations_router
 from .routers.export import router as export_router
 from .routers.dashboard import router as dashboard_router
+from .routers import admin as admin_router  # ✅ Add admin router
 from .core.database import create_tables
 
 # Criar aplicação FastAPI
@@ -157,6 +158,7 @@ app.include_router(suppliers.router, prefix="/api/v1/suppliers", dependencies=de
 app.include_router(tags_router, prefix="/api/v1", dependencies=dependency)
 app.include_router(notifications_router, prefix="/api/v1", dependencies=dependency)
 app.include_router(export_router, prefix="/api/v1", dependencies=dependency)
+app.include_router(admin_router.router, prefix="/api/v1", dependencies=dependency)  # ✅ Admin router
 app.include_router(custom_filters_router, prefix="/api/v1/custom-filters", dependencies=dependency)
 app.include_router(dashboard_router, prefix="/api/v1", dependencies=dependency)
 app.include_router(presentations_router.router, prefix="/api/v1", dependencies=dependency)
